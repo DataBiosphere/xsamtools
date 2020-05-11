@@ -1,0 +1,3 @@
+include pyproject.toml
+include htslib.tar.bz2 bcftools.tar.bz2
+include requirements.txt

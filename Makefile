@@ -2,7 +2,7 @@ MODULES=xsamtools tests
 
 export TNU_TESTMODE?=workspace_access
 
-test: lint mypy tests
+test: lint mypy build tests
 
 lint:
 	flake8 $(MODULES) *.py

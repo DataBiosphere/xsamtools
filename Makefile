@@ -1,3 +1,5 @@
+include common.mk
+
 MODULES=xsamtools tests
 
 export TNU_TESTMODE?=workspace_access

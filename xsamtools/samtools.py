@@ -1,8 +1,9 @@
 import os
 import sys
+import typing
 import subprocess
 
-paths = dict(htsfile=None, bcftools=None)
+paths: typing.Dict[str, str] = dict(htsfile=None, bcftools=None)
 
 def _run(cmd: list, **kwargs):
     p = subprocess.run(cmd, **kwargs)

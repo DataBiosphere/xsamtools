@@ -61,7 +61,7 @@ class Install(install.install):
 
 setup(
     name='xsamtools',
-    version='0.0.3',
+    version='0.1.0',
     description='Lightly modified versions of htslib and bcftools.',
     url='https://github.com/xbrianh/xsamtools.git',
     author='Brian Hannafious',

@@ -28,6 +28,7 @@ class BuildPy(build_py.build_py):
             except subprocess.CalledProcessError:
                 print("Failed to build htslib/bcftools:")
                 traceback.print_exc()
+                raise
 
 
 class Install(install.install):
@@ -57,6 +58,7 @@ class Install(install.install):
             except subprocess.CalledProcessError:
                 print("Failed to package htslib/bcftools")
                 traceback.print_exc()
+                raise
 
 
 setup(

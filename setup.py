@@ -60,11 +60,14 @@ class Install(install.install):
                 traceback.print_exc()
                 raise
 
+with open("README.md") as fh:
+    long_description = fh.read()
 
 setup(
     name='xsamtools',
     version='0.1.0',
     description='Lightly modified versions of htslib and bcftools.',
+    long_description=long_description,
     url='https://github.com/xbrianh/xsamtools.git',
     author='Brian Hannafious',
     author_email='bhannafi@ucsc.edu',

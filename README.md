@@ -1,10 +1,44 @@
 # xsamtools
-Lightly-modified versions of [htslib](https://github.com/samtools/htslib)
-and [bcftools](https://github.com/samtools/bcftools), available through pypi packaging, with capability to merge VCF
-streams.
+xsamtools makes the [samtools](https://samtools.github.io/) tooling from [htslib](https://github.com/samtools/htslib)
+and [bcftools](https://github.com/samtools/bcftools) available through pypi packaging. These tools have been lightly
+modified to allow merges on VCF streams without an index.
 
-# installation
+# Installation
 ```
 pip install xsamtools
 ```
-A C toolchain is required to install xsamtools.
+Installation requires a C toolchain.
+
+# Usage
+
+After succesful installation, the following executables are available:
+
+samtools:
+  - htsfile
+  - bgzip
+  - tabix
+  - bcftools
+
+xsamtools:
+  - merge_vcfs.py
+
+xsamtools also provides Python tooling to create named (FIFO) pipes to Google Storage objects:
+```
+from xsamtools import pipes
+
+reader = pipes.BlobReaderProcess("bucket-name", "read-key")
+print("reader path", reader.filepath)  # local FIFO filepath
+
+writer_key = pipes.BlobWriterProcess("bucket-name", "writ-key")
+print("writer path", writer.filepath)  # local FIFO filepath
+```
+These streams appear as either readable or writable files on the filesystem. Such objects are not seekable.
+
+A utility method is also provided to merge VCFs from GS objects using the streams discussed above:
+```
+from xsamtools import vcf
+
+vcf.combine("src-bucket-name", ["first-src-vcf-key", "second-src-vcf-key"], "dst-bucket-name", "dst-vcf-key")
+```
+There is no formal limit on the number of VCF keys. Care should be taken that the VCF objects provided are aligned by
+chromosome, or the merge will fail.

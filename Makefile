@@ -20,7 +20,7 @@ package_samtools: clean_samtools htslib.tar.bz2 bcftools.tar.bz2
 
 htslib.tar.bz2:
 	git clone --depth 1 -b xbrianh-readers-idx https://github.com/xbrianh/htslib
-	(cd htslib ; rm -rf .git ; autoconf)
+	(cd htslib ; rm -rf .git ; autoheader && autoconf)
 	tar cjf htslib.tar.bz2 htslib
 	rm -rf htslib
 

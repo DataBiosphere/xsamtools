@@ -4,7 +4,7 @@ import tempfile
 import subprocess
 import traceback
 from setuptools import setup, find_packages
-from setuptools.command import install, build_py, sdist
+from setuptools.command import install, build_py
 
 
 install_requires = [line.rstrip() for line in open(os.path.join(os.path.dirname(__file__), "requirements.txt"))]
@@ -23,6 +23,7 @@ class BuildPy(build_py.build_py):
             try:
                 _run(["tar", "xjf", "htslib.tar.bz2", "-C", "build"])
                 _run(["tar", "xjf", "bcftools.tar.bz2", "-C", "build"])
+                _run(["./configure"], cwd="build/htslib")
                 _run(["make"], cwd="build/htslib")
                 _run(["make"], cwd="build/bcftools")
             except subprocess.CalledProcessError:
@@ -35,12 +36,12 @@ class Install(install.install):
     def run(self):
         super().run()
         if not self.dry_run:
+            root = os.path.dirname(os.path.abspath(__file__))
+            bindir = os.path.join(root, os.path.abspath(self.install_scripts))
+            datadir = os.path.join(root, os.path.abspath(self.install_data))
+            libdir = os.path.join(root, os.path.abspath(self.install_lib))
+            includedir = os.path.join(root, os.path.abspath(self.install_headers))
             try:
-                root = os.path.dirname(os.path.abspath(__file__))
-                bindir = os.path.join(root, os.path.abspath(self.install_scripts))
-                libdir = os.path.join(root, os.path.abspath(self.install_lib))
-                includedir = os.path.join(root, os.path.abspath(self.install_headers))
-                datadir = os.path.join(root, os.path.abspath(self.install_data))
                 _run(["make",
                       f"bindir={bindir}",
                       f"includedir={includedir}",
@@ -78,7 +79,8 @@ setup(
     install_requires=install_requires,
     platforms=['MacOS X', 'Posix'],
     test_suite='test',
-    cmdclass=dict(install=Install, build_py=BuildPy),
+    cmdclass=dict(install=Install,
+                  build_py=BuildPy),
     classifiers=[
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',

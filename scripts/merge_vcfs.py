@@ -16,9 +16,5 @@ parser.add_argument("input_keys", help="Comma delimited list of GS bucket locati
 args = parser.parse_args()
 
 keys = args.input_keys.split(",")
-print(args.bucket)
-print(args.output_key)
-for key in keys:
-    print(key)
 vcf.combine(args.bucket, keys, args.bucket, args.output_key)
 

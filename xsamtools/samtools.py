@@ -1,7 +1,10 @@
 import os
 import sys
 import typing
+import warnings
 import subprocess
+
+import xsamtools
 
 paths: typing.Dict[str, str] = dict(htsfile=None, bcftools=None)
 
@@ -11,23 +14,15 @@ def _run(cmd: list, **kwargs):
     return p
 
 def _samtools_binary_path(name):
-    roots = [
-        os.path.abspath(os.path.dirname(sys.executable)),  # typical bin path in a virtual env
-        "/home/jupyter-user/.local/bin"  # terra installation path
-    ]
-    for root in roots:
-        path = os.path.join(root, name)
-        try:
-            _run([path, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            return path
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            pass
-    return None
+    path = os.path.join(xsamtools.__path__[0].split("/lib", 1)[0], "bin", name)
+    try:
+        _run([path, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return path
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
 
 for name in paths:
     paths[name] = _samtools_binary_path(name)
     if paths[name] is None:
-        print(f"WARNING: {name} unavailable: htslib or bcftools build failed during installation. "
-              "          try `pip install -v xsamtools` to diagnose the problem")
-
-available = {name: paths[name] is not None for name in paths}
+        warnings.warn(f"WARNING: {name} unavailable: htslib or bcftools build failed during installation. "
+                      "          try `pip install -v xsamtools` to diagnose the problem")

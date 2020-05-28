@@ -66,7 +66,7 @@ with open("README.md") as fh:
 
 setup(
     name='xsamtools',
-    version='0.1.1',
+    version='0.2.0',
     description='Lightly modified versions of htslib and bcftools.',
     long_description=long_description,
     long_description_content_type='text/markdown',

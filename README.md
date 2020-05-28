@@ -7,7 +7,12 @@ modified to allow merges on VCF streams without an index.
 ```
 pip install xsamtools
 ```
-Installation requires a C toolchain.
+Installation requires a C toolchain. Typically Ubuntu/Debian systems should have the following packages installed:
+  - `libbz2-dev`
+  - `liblzma-dev`
+  - `libcurl4-openssl-dev`
+
+`libcurl4-openssl-dev` may be omitted at the cost of some cloud support features in htslib.
 
 # Usage
 
@@ -34,11 +39,11 @@ print("writer path", writer.filepath)  # local FIFO filepath
 ```
 These streams appear as either readable or writable files on the filesystem. Such objects are not seekable.
 
-A utility method is also provided to merge VCFs from GS objects using the streams discussed above:
+A utility method is also provided to merge VCFs from GS objects:
 ```
 from xsamtools import vcf
 
 vcf.combine("src-bucket-name", ["first-src-vcf-key", "second-src-vcf-key"], "dst-bucket-name", "dst-vcf-key")
 ```
 There is no formal limit on the number of VCF keys. Care should be taken that the VCF objects provided are aligned by
-chromosome, or the merge will fail.
+chromosome or the merge will fail.

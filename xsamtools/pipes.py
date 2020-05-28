@@ -62,10 +62,10 @@ class BlobWriterProcess(AbstractContextManager):
                         break
                     blob_writer.write(data)
 
-    def close(self):
+    def close(self, timeout=300):
         if not self._closed:
             self._closed = True
-            self.proc.join(300)  # TODO: Consider inter-process communication to know when it's safe to close
+            self.proc.join(timeout)  # TODO: Consider inter-process communication to know when it's safe to close
             os.unlink(self.filepath)
             if not self.proc.exitcode:
                 self.proc.terminate()

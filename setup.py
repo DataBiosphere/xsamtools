@@ -69,6 +69,7 @@ setup(
     version='0.1.1',
     description='Lightly modified versions of htslib and bcftools.',
     long_description=long_description,
+    long_description_content_type='text/markdown',
     url='https://github.com/xbrianh/xsamtools.git',
     author='Brian Hannafious',
     author_email='bhannafi@ucsc.edu',

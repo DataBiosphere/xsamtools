@@ -1,1 +1,2 @@
 terra-notebook-utils
+cli-builder

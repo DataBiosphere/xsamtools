@@ -67,12 +67,20 @@ class TestXsamtools(unittest.TestCase):
         warnings.simplefilter("ignore", ResourceWarning)
 
     def test_combine(self):
-        keys = ["test_vcfs/a.vcf.gz", "test_vcfs/b.vcf.gz"]
-        output_key = "test_bcftools_combined.vcf.gz"
-        vcf.combine(WORKSPACE_BUCKET, keys, WORKSPACE_BUCKET, output_key)
-        blob = gs.get_client().bucket(WORKSPACE_BUCKET).blob(output_key)
-        info = VCFInfo.with_blob(blob)
-        self._assert_vcf_info(info)
+        with self.subTest("test cloud locations"):
+            inputs = [f"gs://{WORKSPACE_BUCKET}/test_vcfs/{n}.vcf.gz" for n in "ab"]
+            output = "test_bcftools_combined.vcf.gz"
+            vcf.combine(inputs, output)
+            blob = gs.get_client().bucket(WORKSPACE_BUCKET).blob(output)
+            info = VCFInfo.with_blob(blob)
+            self._assert_vcf_info(info)
+        with self.subTest("test local paths"):
+            inputs = ["tests/fixtures/a.vcf.gz", "tests/fixtures/b.vcf.gz"]
+            output = "test_bcftools_combined.vcf.gz"
+            vcf.combine(inputs, output)
+            blob = gs.get_client().bucket(WORKSPACE_BUCKET).blob(output)
+            info = VCFInfo.with_blob(blob)
+            self._assert_vcf_info(info)
 
     def test_subsample(self):
         samples = ["NWD994242", "NWD637453"]

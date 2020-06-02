@@ -3,6 +3,7 @@ import io
 import os
 import sys
 import typing
+import warnings
 import unittest
 from random import randint
 
@@ -12,6 +13,7 @@ from terra_notebook_utils.vcf import VCFInfo
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
+warnings.simplefilter("ignore", UserWarning)
 from xsamtools import pipes, samtools  # noqa
 samtools.paths['bcftools'] = "build/bcftools/bcftools"
 from xsamtools import vcf  # noqa
@@ -58,6 +60,12 @@ class TestXsamtoolsNamedPipes(unittest.TestCase):
 
 
 class TestXsamtools(unittest.TestCase):
+    def setUp(self):
+        # Suppress the annoying google gcloud _CLOUD_SDK_CREDENTIALS_WARNING warnings
+        warnings.filterwarnings("ignore", "Your application has authenticated using end user credentials")
+        # Suppress unclosed socket warnings
+        warnings.simplefilter("ignore", ResourceWarning)
+
     def test_combine(self):
         keys = ["test_vcfs/a.vcf.gz", "test_vcfs/b.vcf.gz"]
         output_key = "test_bcftools_combined.vcf.gz"

@@ -51,4 +51,13 @@ build: version clean
 install: build
 	pip install --upgrade dist/*.whl
 
-.PHONY: test lint mypy tests clean sdist build install package_samtools
+image:
+	docker build -f ${XVCFMERGE_HOME}/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER -t $(XSAMTOOLS_IMAGE_NAME) .
+
+image-force:
+	docker build --no-cache -f ${XVCFMERGE_HOME}/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER -t $(XSAMTOOLS_IMAGE_NAME) .
+
+publish-image: image
+	docker push $(XSAMTOOLS_IMAGE_NAME)
+
+.PHONY: test lint mypy tests clean sdist build install package_samtools image image-force publish-image

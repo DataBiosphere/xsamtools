@@ -1,0 +1,8 @@
+#!/bin/bash
+set -euo pipefail
+wid=$(docker ps --latest --filter "name=${XSAMTOOLS_CONTAINER_NAME}" --format="{{.ID}}")
+if [[ -z $wid ]]; then
+    exit 1
+fi
+docker kill $wid > /dev/null 2>&1 || :
+docker rm $wid

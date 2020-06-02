@@ -5,12 +5,6 @@ import sys
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
-# XXX REMOVE THIS BLOCK BEFORE MERGING
-import warnings
-warnings.simplefilter("ignore", UserWarning)
-from xsamtools import samtools  # noqa
-samtools.paths['bcftools'] = "build/bcftools/bcftools"
-
 import xsamtools.cli.vcf
 from xsamtools.cli import dispatch
 

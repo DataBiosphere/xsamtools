@@ -22,7 +22,6 @@ def _merge(input_filepaths, output_filepath):
                     "--threads", f"{2 * cores_available}"]
                    + [fp for fp in input_filepaths])
 
-
 def _view(input_filepath, output_filepath, samples):
     with NamedTemporaryFile() as tf:
         with open(tf.name, "w") as fh:
@@ -35,11 +34,16 @@ def _view(input_filepath, output_filepath, samples):
                         "--threads", f"{2 * cores_available}",
                         input_filepath])
 
+def _stats(input_filepath):
+    subprocess.run([samtools.paths['bcftools'],
+                    "stats",
+                    "--threads", f"{2 * cores_available}",
+                    input_filepath])
 
 @xprofile.profile("combine")
-def combine(src_bucket_name, src_keys, dst_bucket_name, dst_key):
-    readers = [pipes.BlobReaderProcess(src_bucket_name, key) for key in src_keys]
-    writer = pipes.BlobWriterProcess(dst_bucket_name, dst_key)
+def combine(src_files, output_file):
+    readers = [_get_reader(fp) for fp in src_files]
+    writer = _get_writer(output_file)
     try:
         _merge([r.filepath for r in readers], writer.filepath)
     finally:
@@ -56,6 +60,13 @@ def subsample(src_path: str, dst_path: str, samples):
     finally:
         reader.close()
         writer.close()
+
+def stats(src_path):
+    reader = _get_reader(src_path)
+    try:
+        _stats(reader.filepath)
+    finally:
+        reader.close()
 
 def _get_reader(path):
     if path.startswith("gs://"):

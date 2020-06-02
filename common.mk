@@ -1,6 +1,10 @@
 # Dependencies: git pandoc moreutils httpie twine
 
 SHELL=/bin/bash -eo pipefail
+  
+ifndef XSAMTOOLS_IMAGE_NAME
+$(error Please run "source environment" in the xvcfmerge repo root directory before running make commands)
+endif
 
 release_major:
 	$(eval export TAG=$(shell git describe --tags --match 'v*.*.*' | perl -ne '/^v(\d)+\.(\d)+\.(\d+)+/; print "v@{[$$1+1]}.0.0"'))

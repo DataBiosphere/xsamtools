@@ -1,0 +1,16 @@
+#!/bin/bash
+set -euo pipefail
+wid=$(docker ps -a --latest --filter "name=${XSAMTOOLS_CONTAINER_NAME}" --format="{{.ID}}")
+if [[ -z $wid ]]; then
+    docker pull ${XSAMTOOLS_IMAGE_NAME}
+    wid=$(docker run \
+          --mount type=bind,source=${XVCFMERGE_HOME}/mount,target=/home/${XSAMTOOLS_DOCKER_USER}/mount \
+          --name ${XSAMTOOLS_CONTAINER_NAME} \
+          -it -d \
+          ${XSAMTOOLS_IMAGE_NAME})
+    echo "Started new container ${wid}"
+else
+    echo "Logging into existing container ${wid}"
+fi
+docker start ${wid} || echo
+docker exec -it $wid /bin/bash

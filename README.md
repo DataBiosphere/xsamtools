@@ -47,3 +47,8 @@ vcf.combine("src-bucket-name", ["first-src-vcf-key", "second-src-vcf-key"], "dst
 ```
 There is no formal limit on the number of VCF keys. Care should be taken that the VCF objects provided are aligned by
 chromosome or the merge will fail.
+
+# Docker
+
+A Docker image with xsamtools installed is published at
+[https://hub.docker.com/repository/docker/xbrianh/xsamtools](https://hub.docker.com/repository/docker/xbrianh/xsamtools)

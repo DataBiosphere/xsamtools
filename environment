@@ -1,0 +1,10 @@
+# Resolve the location of this file and set DSS_HOME to the root
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ] ; do SOURCE="$(readlink "$SOURCE")"; done
+export XVCFMERGE_HOME="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+
+set -a
+XSAMTOOLS_DOCKER_USER="xsamtools"
+XSAMTOOLS_IMAGE_NAME="xbrianh/xsamtools"
+XSAMTOOLS_CONTAINER_NAME="xsamtools"
+set +a

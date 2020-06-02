@@ -67,14 +67,22 @@ class TestXsamtools(unittest.TestCase):
         self._assert_vcf_info(info)
 
     def test_subsample(self):
-        src_bucket = dst_bucket = WORKSPACE_BUCKET
-        src_key = "test_vcfs/a.vcf.gz"
-        output_key = "test_bcftools_subsampled.vcf.gz"
         samples = ["NWD994242", "NWD637453"]
-        vcf.subsample(src_bucket, src_key, dst_bucket, output_key, samples)
-        blob = gs.get_client().bucket(WORKSPACE_BUCKET).blob(output_key)
-        info = VCFInfo.with_blob(blob)
-        self.assertListEqual(info.samples, samples)
+        with self.subTest("test cloud locations"):
+            output_key = "test_bcftools_subsampled.vcf.gz"
+            src_path = f"gs://{WORKSPACE_BUCKET}/test_vcfs/a.vcf.gz"
+            dst_path = f"gs://{WORKSPACE_BUCKET}/{output_key}"
+            vcf.subsample(src_path, dst_path, samples)
+            blob = gs.get_client().bucket(WORKSPACE_BUCKET).blob(output_key)
+            info = VCFInfo.with_blob(blob)
+            self.assertListEqual(info.samples, samples)
+        with self.subTest("test local paths"):
+            output_key = "test_bcftools_subsampled.vcf.gz"
+            src_path = "tests/fixtures/expected.vcf.gz"
+            dst_path = output_key
+            vcf.subsample(src_path, dst_path, samples)
+            info = VCFInfo.with_file(output_key)
+            self.assertListEqual(info.samples, samples)
 
     def _assert_vcf_info(self, info):
         root = os.path.dirname(__file__)

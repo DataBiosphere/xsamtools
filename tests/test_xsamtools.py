@@ -25,7 +25,7 @@ class TestXsamtoolsNamedPipes(unittest.TestCase):
     def setUp(self):
         warnings.simplefilter("ignore", UserWarning)
         warnings.simplefilter("ignore", ResourceWarning)
-        
+
     def test_blob_reader(self):
         with self.subTest("gs url"):
             key = "test_blob_reader_obj"

@@ -13,7 +13,6 @@ from terra_notebook_utils.vcf import VCFInfo
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
-warnings.simplefilter("ignore", UserWarning)
 from xsamtools import pipes, samtools  # noqa
 samtools.paths['bcftools'] = "build/bcftools/bcftools"
 from xsamtools import vcf  # noqa
@@ -23,21 +22,41 @@ WORKSPACE_BUCKET = "fc-9169fcd1-92ce-4d60-9d2d-d19fd326ff10"
 
 
 class TestXsamtoolsNamedPipes(unittest.TestCase):
+    def setUp(self):
+        warnings.simplefilter("ignore", UserWarning)
+        warnings.simplefilter("ignore", ResourceWarning)
+
     def test_blob_reader(self):
-        key = "test_blob_reader_obj"
-        data = os.urandom(1024 * 1024 * 50)
-        with io.BytesIO(data) as fh:
-            gs.get_client().bucket(WORKSPACE_BUCKET).blob(key).upload_from_file(fh)
-        with pipes.BlobReaderProcess(WORKSPACE_BUCKET, key) as reader:
-            in_data = bytearray()
-            with open(reader.filepath, "rb") as fh:
-                while True:
-                    d = fh.read(randint(1024, 1024 * 1024))
-                    if d:
-                        in_data += d
-                    else:
-                        break
-        self.assertEqual(data, in_data)
+        with self.subTest("gs url"):
+            key = "test_blob_reader_obj"
+            data = os.urandom(1024 * 1024 * 50)
+            with io.BytesIO(data) as fh:
+                gs.get_client().bucket(WORKSPACE_BUCKET).blob(key).upload_from_file(fh)
+            url = f"gs://{WORKSPACE_BUCKET}/{key}"
+            with pipes.BlobReaderProcess(url) as reader:
+                in_data = bytearray()
+                with open(reader.filepath, "rb") as fh:
+                    while True:
+                        d = fh.read(randint(1024, 1024 * 1024))
+                        if d:
+                            in_data += d
+                        else:
+                            break
+            self.assertEqual(data, in_data)
+        with self.subTest("drs url"):
+            url = "drs://dg.4503/57f58130-2d66-4d46-9b2b-539f7e6c2080"
+            expected_data = (b'\x1f\x8b\x08\x04\x00\x00\x00\x00\x00\xff\x06\x00BC\x02\x00\xd7$\x8d][\xcf-9q}\xcf\xaf@'
+                             b'\xf0\x8a"\xdb\xe5\xab\x94\x89\x04\x01\x02\x84DQ \x08\x9eF\x08\x86\x8b4\xcc\xa0a\x84\x94'
+                             b'\x7f\x1f\xf7\xe9\xdd\xb6\xb7\xd7r\xd5\xf7=\x9e\xe3\xb5\xbb\xdbU.W\xad*\x97\xbf\xf7\xbd?'
+                             b'\xfe\xe5\xcb/\xfe\xf8\xf57\x7f\xfd\xdd\xb7\x9f\xfd\xfa\xdf~\xf2\x8f\xf8\xcf\xe1\x9f\xbe'
+                             b'\xf7\xbd\x9f\xfc\xec\x17\xbf\xfa\xf1\xff|\xf6/?\xfb\xd1g\xff\xfd\x83_\xfe\xf2\xfb?\xfa'
+                             b'\xe2\xef\xbf\xff\xe6/\x7f\xfb\xf6/_\x7f\xf5\xd9w\x7f\xf0\xe5\x97\xdf\xe9\xa8o\xbf\xf8'
+                             b'\xe6\xef\xdf\xf9\xdb\xef\xfe\xfe\xf7/\xfe\xf0\xdd\x7f\xed\x98\xdf\x7f\xfd\xd5\xb7\x7f'
+                             b'\xf9\xd3\'\xcc\xef\xff\xfc\x8d\xff\xfe\x97_|\xf5\xa7o\xff\xfcY\x88')
+            with pipes.BlobReaderProcess(url) as reader:
+                with open(reader.filepath, "rb") as fh:
+                    data = fh.read(len(expected_data))
+            self.assertEqual(data[:len(expected_data)], expected_data)
 
     def test_blob_writer(self):
         key = "test_blob_writer_obj"

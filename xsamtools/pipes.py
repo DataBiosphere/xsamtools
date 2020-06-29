@@ -6,21 +6,31 @@ from multiprocessing import Process
 
 import gs_chunked_io as gscio
 
-from terra_notebook_utils import gs
+from terra_notebook_utils import gs, drs, WORKSPACE_GOOGLE_PROJECT
 
 
 class BlobReaderProcess(AbstractContextManager):
-    def __init__(self, bucket_name, key, filepath=None):
+    def __init__(self, url, filepath=None, credentials_data=None):
+        assert url.startswith("gs://") or url.startswith("drs://")
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
-        self.proc = Process(target=self.run, args=(bucket_name, key, self.filepath))
+        self.proc = Process(target=self.run, args=(url, self.filepath))
         self.proc.start()
         self._closed = False
 
-    def run(self, bucket_name, key, filepath):
-        fd = os.open(filepath, os.O_WRONLY)
-        blob = gs.get_client().bucket(bucket_name).get_blob(key)
+    def run(self, url, filepath):
+        if url.startswith("gs://"):
+            bucket_name, key = url[5:].split("/", 1)
+            client = gs.get_client()
+            bucket = client.bucket(bucket_name)
+        elif url.startswith("drs://"):
+            client, bucket_name, key = drs.resolve_drs_for_gs_storage(url)
+            bucket = client.bucket(bucket_name, user_project=WORKSPACE_GOOGLE_PROJECT)
+        else:
+            raise ValueError(f"Unsupported schema for url: {url}")
+        blob = bucket.get_blob(key)
         blob_reader = gscio.AsyncReader(blob, chunks_to_buffer=1)
+        fd = os.open(filepath, os.O_WRONLY)
         while True:
             data = bytearray(blob_reader.read(blob_reader.chunk_size))
             if not data:

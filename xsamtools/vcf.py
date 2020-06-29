@@ -5,7 +5,7 @@ from multiprocessing import cpu_count
 from tempfile import NamedTemporaryFile
 import subprocess
 
-from terra_notebook_utils import xprofile
+from terra_notebook_utils import xprofile, drs
 
 from xsamtools import pipes, vcf, samtools
 
@@ -69,9 +69,8 @@ def stats(src_path):
         reader.close()
 
 def _get_reader(path):
-    if path.startswith("gs://"):
-        bucket, key = path[5:].split("/", 1)
-        return pipes.BlobReaderProcess(bucket, key)
+    if path.startswith("gs://") or path.startswith("drs://"):
+        return pipes.BlobReaderProcess(path)
     else:
         fh = open(path)
         fh.filepath = path

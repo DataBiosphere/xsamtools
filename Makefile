@@ -4,7 +4,7 @@ MODULES=xsamtools tests
 
 export TNU_TESTMODE?=workspace_access
 
-test: lint mypy build tests
+test: lint mypy test-samtools tests
 
 lint:
 	flake8 $(MODULES) *.py
@@ -45,7 +45,6 @@ sdist: clean
 	python setup.py sdist
 
 build: version clean
-	-rm -rf dist
 	python setup.py bdist_wheel
 
 install: build
@@ -59,5 +58,11 @@ image-force:
 
 publish-image: image
 	docker push $(XSAMTOOLS_IMAGE_NAME)
+
+test-samtools: build/htslib/htsfile build/bcftools/bcftools
+build/htslib/htsfile:
+	python setup.py bdist_wheel
+build/bcftools/bcftools:
+	python setup.py bdist_wheel
 
 .PHONY: test lint mypy tests clean sdist build install package_samtools image image-force publish-image

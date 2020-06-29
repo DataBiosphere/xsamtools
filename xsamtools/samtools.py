@@ -19,7 +19,17 @@ def _samtools_binary_path(name):
         _run([path, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return path
     except (FileNotFoundError, subprocess.CalledProcessError):
-        return None
+        pass
+    # Look for samtools build directory in repo root (useful for issuing commands from repo)
+    paths = dict(bcftools=os.path.join(xsamtools.__path__[0], "..", "build", "bcftools", "bcftools"),
+                 htsfile=os.path.join(xsamtools.__path__[0], "..", "build", "htslib", "htsfile"))
+    path = paths[name]
+    try:
+        _run([path, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return path
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+    return None
 
 for name in paths:
     paths[name] = _samtools_binary_path(name)

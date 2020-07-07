@@ -41,10 +41,10 @@ xsamtools/version.py: setup.py
 clean:
 	git clean -dfx
 
-sdist: clean
+sdist: clean version
 	python setup.py sdist
 
-build: version clean
+build: clean version
 	python setup.py bdist_wheel
 
 install: build

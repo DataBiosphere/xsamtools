@@ -24,8 +24,9 @@ class BlobReaderProcess(AbstractContextManager):
             client = gs.get_client()
             bucket = client.bucket(bucket_name)
         elif url.startswith("drs://"):
-            client, bucket_name, key = drs.resolve_drs_for_gs_storage(url)
-            bucket = client.bucket(bucket_name, user_project=WORKSPACE_GOOGLE_PROJECT)
+            client, info = drs.resolve_drs_for_gs_storage(url)
+            bucket = client.bucket(info.bucket_name, user_project=WORKSPACE_GOOGLE_PROJECT)
+            key = info.key
         else:
             raise ValueError(f"Unsupported schema for url: {url}")
         blob = bucket.get_blob(key)

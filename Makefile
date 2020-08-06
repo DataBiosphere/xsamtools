@@ -51,10 +51,10 @@ install: build
 	pip install --upgrade dist/*.whl
 
 image:
-	docker build -f ${XVCFMERGE_HOME}/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER -t $(XSAMTOOLS_IMAGE_NAME) .
+	docker build -f ${XVCFMERGE_HOME}/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(XSAMTOOLS_IMAGE_NAME) .
 
 image-force:
-	docker build --no-cache -f ${XVCFMERGE_HOME}/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER -t $(XSAMTOOLS_IMAGE_NAME) .
+	docker build --no-cache -f ${XVCFMERGE_HOME}/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(XSAMTOOLS_IMAGE_NAME) .
 
 publish-image: image
 	docker push $(XSAMTOOLS_IMAGE_NAME)

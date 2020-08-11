@@ -39,6 +39,6 @@ def view(args: argparse.Namespace):
     """
     if not args.output:
         time_stamp = str(datetime.datetime.now()).split('.')[0].replace(':', '').replace(' ', '-')
-        args.output = f'{args.input}.{time_stamp}.output.cram'  # schema output, i.e. gs:// or file//:, is preserved
+        args.output = f'{args.cram}.{time_stamp}.output.cram'  # schema output, i.e. gs:// or file//:, is preserved
     cram.view(cram=args.cram, crai=args.crai, regions=args.regions, output=args.output, cram_format=args.C)
     # print(args.cram, args.crai, args.C, args.regions, args.output)

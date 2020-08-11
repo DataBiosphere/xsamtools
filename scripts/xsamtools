@@ -5,8 +5,10 @@ import sys
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
+# imports required for these command groups to show in the CLI
 import xsamtools.cli.vcf
 import xsamtools.cli.cram
+
 from xsamtools.cli import dispatch
 
 

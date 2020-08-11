@@ -76,6 +76,7 @@ def get_version():
     else:
         p = subprocess.run(["git", "describe", "--tags", "--match", "v*.*.*"], stdout=subprocess.PIPE)
         if 128 == p.returncode:
+
             warnings.warn('There are no git tags with version information. '
                           'To tag the first commit as v0.0.0 use '
                           '`git tag --annotate "v0.0.0" $(git rev-list --max-parents=0 HEAD) -m "v0.0.0"`')

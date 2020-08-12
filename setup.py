@@ -1,6 +1,5 @@
 import os
 import glob
-import tempfile
 import warnings
 import subprocess
 import traceback
@@ -16,7 +15,6 @@ def _run(cmd: list, **kwargs):
     p.check_returncode()
     return p
 
-
 class BuildPy(build_py.build_py):
     def run(self):
         super().run()
@@ -24,14 +22,16 @@ class BuildPy(build_py.build_py):
             try:
                 _run(["tar", "xjf", "htslib.tar.bz2", "-C", "build"])
                 _run(["tar", "xjf", "bcftools.tar.bz2", "-C", "build"])
+                _run(["tar", "xjf", "samtools.tar.bz2", "-C", "build"])
                 _run(["./configure"], cwd="build/htslib")
+                _run(["./configure"], cwd="build/samtools")
                 _run(["make"], cwd="build/htslib")
                 _run(["make"], cwd="build/bcftools")
+                _run(["make"], cwd="build/samtools")
             except subprocess.CalledProcessError:
-                print("Failed to build htslib/bcftools:")
+                print("Failed to build samtools/htslib/bcftools:")
                 traceback.print_exc()
                 raise
-
 
 class Install(install.install):
     def run(self):
@@ -91,7 +91,7 @@ def get_version():
 setup(
     name='xsamtools',
     version=get_version(),
-    description='Lightly modified versions of htslib and bcftools.',
+    description='Lightly modified versions of samtools, htslib, and bcftools.',
     long_description=long_description,
     long_description_content_type='text/markdown',
     url='https://github.com/xbrianh/xsamtools.git',

@@ -1,6 +1,5 @@
 import os
 import glob
-import tempfile
 import warnings
 import subprocess
 import traceback
@@ -12,9 +11,17 @@ install_requires = [line.rstrip() for line in open(os.path.join(os.path.dirname(
 
 
 def _run(cmd: list, **kwargs):
-    p = subprocess.run(cmd, **kwargs)
-    p.check_returncode()
-    return p
+    print(f'Now running: {cmd}')
+    kwargs['shell'] = True
+    kwargs['stdout'] = subprocess.PIPE
+    kwargs['stderr'] = subprocess.PIPE
+    p = subprocess.Popen(cmd, **kwargs)
+    stdout, stderr = p.communicate()
+    if p.returncode:
+        raise subprocess.CalledProcessError(p.returncode, cmd, stdout, stderr)
+    elif stderr:
+        print(f'\nstdout: {stdout}\n')
+        print(f'\nstderr: {stderr}\n\n')
 
 
 class BuildPy(build_py.build_py):
@@ -24,11 +31,15 @@ class BuildPy(build_py.build_py):
             try:
                 _run(["tar", "xjf", "htslib.tar.bz2", "-C", "build"])
                 _run(["tar", "xjf", "bcftools.tar.bz2", "-C", "build"])
+                _run(["tar", "xjf", "samtools-1.10.tar.bz2", "-C", "build"])
                 _run(["./configure"], cwd="build/htslib")
+                _run(["./configure"], cwd="build/samtools-1.10")
                 _run(["make"], cwd="build/htslib")
                 _run(["make"], cwd="build/bcftools")
+                _run(["make"], cwd="build/samtools-1.10")
+                _run(["make", "install"], cwd="build/samtools-1.10")
             except subprocess.CalledProcessError:
-                print("Failed to build htslib/bcftools:")
+                print("Failed to build htslib/bcftools/samtools:")
                 traceback.print_exc()
                 raise
 
@@ -58,7 +69,7 @@ class Install(install.install):
                       "INSTALL_MAN=:",
                       "install"], cwd="build/bcftools")
             except subprocess.CalledProcessError:
-                print("Failed to package htslib/bcftools")
+                print("Failed to package htslib/bcftools/samtools")
                 traceback.print_exc()
                 raise
 
@@ -76,6 +87,7 @@ def get_version():
     else:
         p = subprocess.run(["git", "describe", "--tags", "--match", "v*.*.*"], stdout=subprocess.PIPE)
         if 128 == p.returncode:
+
             warnings.warn('There are no git tags with version information. '
                           'To tag the first commit as v0.0.0 use '
                           '`git tag --annotate "v0.0.0" $(git rev-list --max-parents=0 HEAD) -m "v0.0.0"`')

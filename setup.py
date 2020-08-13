@@ -2,6 +2,7 @@ import os
 import glob
 import warnings
 import subprocess
+import traceback
 from setuptools import setup, find_packages
 from setuptools.command import install, build_py
 
@@ -10,33 +11,27 @@ install_requires = [line.rstrip() for line in open(os.path.join(os.path.dirname(
 
 
 def _run(cmd: list, **kwargs):
-    cmd = ' '.join(cmd)
-    print(f'Now running: {cmd}')
-    kwargs['shell'] = True
-    kwargs['stdout'] = subprocess.PIPE
-    kwargs['stderr'] = subprocess.PIPE
-    p = subprocess.Popen(cmd, **kwargs)
-    stdout, stderr = p.communicate()
-    if p.returncode:
-        print(f'\nstdout: {stdout}\n')
-        print(f'\nstderr: {stderr}\n\n')
-        raise subprocess.CalledProcessError(p.returncode, cmd, stdout, stderr)
-
+    p = subprocess.run(cmd, **kwargs)
+    p.check_returncode()
+    return p
 
 class BuildPy(build_py.build_py):
     def run(self):
         super().run()
         if not self.dry_run:
-            _run(["tar", "xjf", "htslib.tar.bz2", "-C", "build"])
-            _run(["tar", "xjf", "bcftools.tar.bz2", "-C", "build"])
-            _run(["tar", "xjf", "samtools-1.10.tar.bz2", "-C", "build"])
-            _run(["./configure"], cwd="build/htslib")
-            _run(["./configure"], cwd="build/samtools-1.10")
-            _run(["make"], cwd="build/htslib")
-            _run(["make"], cwd="build/bcftools")
-            _run(["make"], cwd="build/samtools-1.10")
-            _run(["make", "install"], cwd="build/samtools-1.10")  # may require chown -R $USER /usr/local
-
+            try:
+                _run(["tar", "xjf", "htslib.tar.bz2", "-C", "build"])
+                _run(["tar", "xjf", "bcftools.tar.bz2", "-C", "build"])
+                _run(["tar", "xjf", "samtools-1.10.tar.bz2", "-C", "build"])
+                _run(["./configure"], cwd="build/htslib")
+                _run(["./configure"], cwd="build/samtools-1.10")
+                _run(["make"], cwd="build/htslib")
+                _run(["make"], cwd="build/bcftools")
+                _run(["make"], cwd="build/samtools-1.10")
+            except subprocess.CalledProcessError:
+                print("Failed to build htslib/bcftools:")
+                traceback.print_exc()
+                raise
 
 class Install(install.install):
     def run(self):
@@ -47,25 +42,28 @@ class Install(install.install):
             datadir = os.path.join(root, os.path.abspath(self.install_data))
             libdir = os.path.join(root, os.path.abspath(self.install_lib))
             includedir = os.path.join(root, os.path.abspath(self.install_headers))
-            _run(["make",
-                  f"bindir={bindir}",
-                  f"includedir={includedir}",
-                  f"libdir={libdir}",
-                  f"libexecdir={libdir}",
-                  f"datarootdir={datadir}",
-                  "INSTALL_MAN=:",
-                  "install"], cwd="build/htslib")
-            _run(["make",
-                  f"bindir={bindir}",
-                  f"libdir={libdir}",
-                  f"libexecdir={libdir}",
-                  "INSTALL_MAN=:",
-                  "install"], cwd="build/bcftools")
-
+            try:
+                _run(["make",
+                      f"bindir={bindir}",
+                      f"includedir={includedir}",
+                      f"libdir={libdir}",
+                      f"libexecdir={libdir}",
+                      f"datarootdir={datadir}",
+                      "INSTALL_MAN=:",
+                      "install"], cwd="build/htslib")
+                _run(["make",
+                      f"bindir={bindir}",
+                      f"libdir={libdir}",
+                      f"libexecdir={libdir}",
+                      "INSTALL_MAN=:",
+                      "install"], cwd="build/bcftools")
+            except subprocess.CalledProcessError:
+                print("Failed to package htslib/bcftools")
+                traceback.print_exc()
+                raise
 
 with open("README.md") as fh:
     long_description = fh.read()
-
 
 def get_version():
     filepath = os.path.join(os.path.dirname(__file__), "gs_chunked_io", "version.py")
@@ -78,7 +76,6 @@ def get_version():
     else:
         p = subprocess.run(["git", "describe", "--tags", "--match", "v*.*.*"], stdout=subprocess.PIPE)
         if 128 == p.returncode:
-
             warnings.warn('There are no git tags with version information. '
                           'To tag the first commit as v0.0.0 use '
                           '`git tag --annotate "v0.0.0" $(git rev-list --max-parents=0 HEAD) -m "v0.0.0"`')
@@ -90,7 +87,6 @@ def get_version():
                 out = out.split("-", 1)[0]
             assert out.startswith("v")
             return out[1:]
-
 
 setup(
     name='xsamtools',

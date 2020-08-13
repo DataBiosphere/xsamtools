@@ -11,8 +11,6 @@ __pycache__/
 /build/
 /dist/
 /.eggs/
-/venv/
-/v3nv/
 
 htslib
 bcftools

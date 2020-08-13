@@ -3,6 +3,7 @@ import sys
 import typing
 import warnings
 import subprocess
+from typing import Optional
 
 import xsamtools
 

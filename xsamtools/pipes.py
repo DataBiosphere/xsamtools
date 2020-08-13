@@ -4,7 +4,7 @@ import multiprocessing
 from uuid import uuid4
 from contextlib import AbstractContextManager
 from concurrent.futures import ProcessPoolExecutor, Future, as_completed
-from typing import Tuple, BinaryIO
+from typing import Tuple, BinaryIO, Optional
 
 import gs_chunked_io as gscio
 
@@ -12,7 +12,7 @@ from terra_notebook_utils import gs, drs, WORKSPACE_GOOGLE_PROJECT
 
 
 class BlobReaderProcess(AbstractContextManager):
-    def __init__(self, url, filepath=None, credentials_data=None):
+    def __init__(self, url: str, filepath: str=None):
         assert url.startswith("gs://") or url.startswith("drs://")
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
@@ -70,7 +70,7 @@ class BlobReaderProcess(AbstractContextManager):
         self.close()
 
 class BlobWriterProcess(AbstractContextManager):
-    def __init__(self, bucket_name, key, filepath=None):
+    def __init__(self, bucket_name: str, key: str, filepath: Optional[str]=None):
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
         self.executor = ProcessPoolExecutor(max_workers=1)
@@ -79,7 +79,7 @@ class BlobWriterProcess(AbstractContextManager):
         self._closed = False
 
     @staticmethod
-    def run(bucket_name, key, filepath):
+    def run(bucket_name: str, key: str, filepath: str):
         bucket = gs.get_client().bucket(bucket_name)
         with open(filepath, "rb") as fh:
             with gscio.Writer(key, bucket, threads=1) as blob_writer:

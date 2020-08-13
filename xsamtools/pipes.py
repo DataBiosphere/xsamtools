@@ -36,20 +36,20 @@ class BlobReaderProcess(AbstractContextManager):
             raise ValueError(f"Unsupported schema for url: {url}")
 
         blob = bucket.get_blob(key)
-        blob_reader = gscio.Reader(blob, threads=1)
         with open(filepath, "wb") as fh:
-            while True:
-                data = bytearray(blob_reader.read(blob_reader.chunk_size))
-                if not data:
-                    break
-                while data:
-                    if not queue.empty() and queue.get_nowait():
-                        return
-                    try:
-                        k = fh.write(data)
-                        data = data[k:]
-                    except BrokenPipeError:
-                        time.sleep(1)
+            with gscio.Reader(blob, threads=1) as blob_reader:
+                while True:
+                    data = bytearray(blob_reader.read(blob_reader.chunk_size))
+                    if not data:
+                        break
+                    while data:
+                        if not queue.empty() and queue.get_nowait():
+                            return
+                        try:
+                            k = fh.write(data)
+                            data = data[k:]
+                        except BrokenPipeError:
+                            time.sleep(1)
 
     def close(self):
         if not self._closed:

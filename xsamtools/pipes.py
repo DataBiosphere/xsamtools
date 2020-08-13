@@ -3,6 +3,7 @@ import time
 import multiprocessing
 from uuid import uuid4
 from contextlib import AbstractContextManager
+from concurrent.futures import ProcessPoolExecutor, Future, as_completed
 
 import gs_chunked_io as gscio
 
@@ -15,11 +16,13 @@ class BlobReaderProcess(AbstractContextManager):
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
         self.queue = multiprocessing.Manager().Queue()
-        self.proc = multiprocessing.Process(target=self.run, args=(url, self.filepath, self.queue))
-        self.proc.start()
+        self.executor = ProcessPoolExecutor(max_workers=1)
+        self.future = self.executor.submit(BlobReaderProcess.run, url, self.filepath, self.queue)
+        self.future.add_done_callback(check_future_result)
         self._closed = False
 
-    def run(self, url, filepath, queue: multiprocessing.Queue):
+    @staticmethod
+    def run(url: str, filepath: str, queue: multiprocessing.Queue):
         if url.startswith("gs://"):
             bucket_name, key = url[5:].split("/", 1)
             client = gs.get_client()
@@ -31,6 +34,7 @@ class BlobReaderProcess(AbstractContextManager):
             key = info.key
         else:
             raise ValueError(f"Unsupported schema for url: {url}")
+
         blob = bucket.get_blob(key)
         blob_reader = gscio.Reader(blob, threads=1)
         with open(filepath, "wb") as fh:
@@ -51,40 +55,47 @@ class BlobReaderProcess(AbstractContextManager):
         if not self._closed:
             self._closed = True
             self.queue.put("stop")
-            self.proc.join(1)
+            self.executor.shutdown(wait=True)
             os.unlink(self.filepath)
-            if not self.proc.exitcode:
-                self.proc.terminate()
 
     def __exit__(self, *args, **kwargs):
         self.close()
-
 
 class BlobWriterProcess(AbstractContextManager):
     def __init__(self, bucket_name, key, filepath=None):
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
-        self.proc = multiprocessing.Process(target=self.run, args=(bucket_name, key, self.filepath))
-        self.proc.start()
+        self.executor = ProcessPoolExecutor(max_workers=1)
+        self.future = self.executor.submit(BlobWriterProcess.run, bucket_name, key, self.filepath)
+        self.future.add_done_callback(check_future_result)
         self._closed = False
 
-    def run(self, bucket_name, key, filepath):
+    @staticmethod
+    def run(bucket_name, key, filepath):
         bucket = gs.get_client().bucket(bucket_name)
-        with gscio.Writer(key, bucket, threads=1) as blob_writer:
-            with open(filepath, "rb") as fh:
+        with open(filepath, "rb") as fh:
+            with gscio.Writer(key, bucket, threads=1) as blob_writer:
                 while True:
                     data = fh.read(blob_writer.chunk_size)
                     if not data:
                         break
                     blob_writer.write(data)
 
-    def close(self, timeout=300):
+    def close(self, timeout: int=300):
         if not self._closed:
             self._closed = True
-            self.proc.join(timeout)  # TODO: Consider inter-process communication to know when it's safe to close
+            for _ in as_completed([self.future], timeout=300):
+                pass
+            self.executor.shutdown()
             os.unlink(self.filepath)
-            if not self.proc.exitcode:
-                self.proc.terminate()
 
     def __exit__(self, *args, **kwargs):
         self.close()
+
+def check_future_result(f: Future):
+    try:
+        f.result()
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        os._exit(1)  # bail out without waiting around for forked processes

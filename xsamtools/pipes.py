@@ -1,8 +1,8 @@
 import os
 import time
+import multiprocessing
 from uuid import uuid4
 from contextlib import AbstractContextManager
-from multiprocessing import Process
 
 import gs_chunked_io as gscio
 
@@ -14,11 +14,12 @@ class BlobReaderProcess(AbstractContextManager):
         assert url.startswith("gs://") or url.startswith("drs://")
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
-        self.proc = Process(target=self.run, args=(url, self.filepath))
+        self.queue = multiprocessing.Manager().Queue()
+        self.proc = multiprocessing.Process(target=self.run, args=(url, self.filepath, self.queue))
         self.proc.start()
         self._closed = False
 
-    def run(self, url, filepath):
+    def run(self, url, filepath, queue: multiprocessing.Queue):
         if url.startswith("gs://"):
             bucket_name, key = url[5:].split("/", 1)
             client = gs.get_client()
@@ -32,21 +33,24 @@ class BlobReaderProcess(AbstractContextManager):
             raise ValueError(f"Unsupported schema for url: {url}")
         blob = bucket.get_blob(key)
         blob_reader = gscio.Reader(blob, threads=1)
-        fd = os.open(filepath, os.O_WRONLY)
-        while True:
-            data = bytearray(blob_reader.read(blob_reader.chunk_size))
-            if not data:
-                break
-            while data:
-                try:
-                    k = os.write(fd, data)
-                    data = data[k:]
-                except BrokenPipeError:
-                    time.sleep(1)
+        with open(filepath, "wb") as fh:
+            while True:
+                data = bytearray(blob_reader.read(blob_reader.chunk_size))
+                if not data:
+                    break
+                while data:
+                    if not queue.empty() and queue.get_nowait():
+                        return
+                    try:
+                        k = fh.write(data)
+                        data = data[k:]
+                    except BrokenPipeError:
+                        time.sleep(1)
 
     def close(self):
         if not self._closed:
             self._closed = True
+            self.queue.put("stop")
             self.proc.join(1)
             os.unlink(self.filepath)
             if not self.proc.exitcode:
@@ -60,7 +64,7 @@ class BlobWriterProcess(AbstractContextManager):
     def __init__(self, bucket_name, key, filepath=None):
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
-        self.proc = Process(target=self.run, args=(bucket_name, key, self.filepath))
+        self.proc = multiprocessing.Process(target=self.run, args=(bucket_name, key, self.filepath))
         self.proc.start()
         self._closed = False
 

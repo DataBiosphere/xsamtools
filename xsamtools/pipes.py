@@ -25,6 +25,7 @@ class BlobReaderProcess(AbstractContextManager):
             bucket = client.bucket(bucket_name)
         elif url.startswith("drs://"):
             client, info = drs.resolve_drs_for_gs_storage(url)
+            drs.enable_requester_pays()
             bucket = client.bucket(info.bucket_name, user_project=WORKSPACE_GOOGLE_PROJECT)
             key = info.key
         else:

@@ -7,8 +7,16 @@ import warnings
 import unittest
 from random import randint
 
-from terra_notebook_utils import gs
-from terra_notebook_utils.vcf import VCFInfo
+# WORKSPACE_NAME and GOOGLE_PROJECT are needed for tnu.drs.enable_requester_pays()
+WORKSPACE_NAME = "terra-notebook-utils-tests"
+GOOGLE_PROJECT = "firecloud-cgl"
+WORKSPACE_BUCKET = "fc-9169fcd1-92ce-4d60-9d2d-d19fd326ff10"
+os.environ['WORKSPACE_NAME'] = WORKSPACE_NAME
+os.environ['GOOGLE_PROJECT'] = GOOGLE_PROJECT
+os.environ['WORKSPACE_BUCKET'] = WORKSPACE_BUCKET
+
+from terra_notebook_utils import gs  # noqa
+from terra_notebook_utils.vcf import VCFInfo  # noqa
 
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
@@ -16,9 +24,6 @@ sys.path.insert(0, pkg_root)  # noqa
 from xsamtools import pipes, samtools  # noqa
 samtools.paths['bcftools'] = "build/bcftools/bcftools"
 from xsamtools import vcf  # noqa
-
-
-WORKSPACE_BUCKET = "fc-9169fcd1-92ce-4d60-9d2d-d19fd326ff10"
 
 
 class TestXsamtoolsNamedPipes(unittest.TestCase):

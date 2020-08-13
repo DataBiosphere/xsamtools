@@ -1,6 +1,8 @@
 include common.mk
 
 MODULES=xsamtools tests
+HTSLIB_VERSION=1.10.2
+BCFTOOLS_VERSION=1.10.2
 
 export TNU_TESTMODE?=workspace_access
 
@@ -19,13 +21,13 @@ tests:
 package_samtools: clean_samtools htslib.tar.bz2 bcftools.tar.bz2
 
 htslib.tar.bz2:
-	git clone --depth 1 -b xbrianh-readers-idx https://github.com/xbrianh/htslib
+	git clone --depth 1 -b $(HTSLIB_VERSION) https://github.com/samtools/htslib
 	(cd htslib ; rm -rf .git ; autoheader && autoconf)
 	tar cjf htslib.tar.bz2 htslib
 	rm -rf htslib
 
 bcftools.tar.bz2:
-	git clone --depth 1 -b xbrianh-no-index https://github.com/xbrianh/bcftools
+	git clone --depth 1 -b $(BCFTOOLS_VERSION) https://github.com/samtools/bcftools
 	(cd bcftools ; rm -rf .git)
 	tar cjf bcftools.tar.bz2 bcftools
 	rm -rf bcftools

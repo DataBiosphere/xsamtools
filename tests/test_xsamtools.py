@@ -6,6 +6,7 @@ import typing
 import warnings
 import unittest
 from random import randint
+from contextlib import closing
 
 # WORKSPACE_NAME and GOOGLE_PROJECT are needed for tnu.drs.enable_requester_pays()
 WORKSPACE_NAME = "terra-notebook-utils-tests"
@@ -39,10 +40,11 @@ class TestXsamtoolsNamedPipes(unittest.TestCase):
                 gs.get_client().bucket(WORKSPACE_BUCKET).blob(key).upload_from_file(fh)
             url = f"gs://{WORKSPACE_BUCKET}/{key}"
             with pipes.BlobReaderProcess(url) as reader:
-                in_data = bytearray()
-                with open(reader.filepath, "rb") as fh:
+                handle, first_byte = reader.get_handle()
+                in_data = bytearray(first_byte)
+                with closing(handle):
                     while True:
-                        d = fh.read(randint(1024, 1024 * 1024))
+                        d = handle.read(randint(1024, 1024 * 1024))
                         if d:
                             in_data += d
                         else:
@@ -59,22 +61,24 @@ class TestXsamtoolsNamedPipes(unittest.TestCase):
                              b'\xe6\xef\xdf\xf9\xdb\xef\xfe\xfe\xf7/\xfe\xf0\xdd\x7f\xed\x98\xdf\x7f\xfd\xd5\xb7\x7f'
                              b'\xf9\xd3\'\xcc\xef\xff\xfc\x8d\xff\xfe\x97_|\xf5\xa7o\xff\xfcY\x88')
             with pipes.BlobReaderProcess(url) as reader:
-                with open(reader.filepath, "rb") as fh:
-                    data = fh.read(len(expected_data))
+                handle, first_byte = reader.get_handle()
+                data = bytearray(first_byte)
+                with closing(handle):
+                    data += handle.read(len(expected_data) - len(data))
             self.assertEqual(data[:len(expected_data)], expected_data)
 
     def test_blob_writer(self):
         key = "test_blob_writer_obj"
         data = os.urandom(1024 * 1024 * 50)
         with pipes.BlobWriterProcess(WORKSPACE_BUCKET, key) as writer:
-            with open(writer.filepath, "wb") as fh:
+            with writer.get_handle() as handle:
                 out_data = bytearray(data)
                 while True:
                     chunk_size = randint(1024, 1024 * 1024)
                     to_write = out_data[:chunk_size]
                     out_data = out_data[chunk_size:]
                     if to_write:
-                        fh.write(to_write)
+                        handle.write(to_write)
                     else:
                         break
 

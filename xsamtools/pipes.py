@@ -4,6 +4,7 @@ import multiprocessing
 from uuid import uuid4
 from contextlib import AbstractContextManager
 from concurrent.futures import ProcessPoolExecutor, Future, as_completed
+from typing import Tuple, BinaryIO
 
 import gs_chunked_io as gscio
 
@@ -51,6 +52,13 @@ class BlobReaderProcess(AbstractContextManager):
                         except BrokenPipeError:
                             time.sleep(1)
 
+    def get_handle(self) -> Tuple[BinaryIO, bytes]:
+        """
+        Get readable handle while avoiding FIFO deadlocks.
+        See: https://stackoverflow.com/questions/5782279/why-does-a-read-only-open-of-a-named-pipe-block
+        """
+        return _get_fifo_read_handle(self.filepath)
+
     def close(self):
         if not self._closed:
             self._closed = True
@@ -81,6 +89,13 @@ class BlobWriterProcess(AbstractContextManager):
                         break
                     blob_writer.write(data)
 
+    def get_handle(self) -> BinaryIO:
+        """
+        Get writable handle while avoiding FIFO deadlocks.
+        See: https://stackoverflow.com/questions/5782279/why-does-a-read-only-open-of-a-named-pipe-block
+        """
+        return _get_fifo_write_handle(self.filepath)
+
     def close(self, timeout: int=300):
         if not self._closed:
             self._closed = True
@@ -99,3 +114,38 @@ def check_future_result(f: Future):
         import traceback
         traceback.print_exc()
         os._exit(1)  # bail out without waiting around for forked processes
+
+def _get_fifo_read_handle(filepath: str, timeout: int=10) -> Tuple[BinaryIO, bytes]:
+    """
+    Check that FIFO at `filepath` is readable and return high level file handle.
+    If FIFO is not readable after `timeout`, raise `OSError`.
+    """
+    read_fd = os.open(filepath, os.O_RDONLY | os.O_NONBLOCK)
+    for _ in range(timeout):
+        try:
+            first_byte = os.read(read_fd, 1)
+            if first_byte:
+                break
+        except BlockingIOError:
+            pass
+        time.sleep(1)
+    else:
+        raise OSError("pipe failed to open")
+    fh = open(filepath, "rb")
+    os.close(read_fd)
+    return fh, first_byte
+
+def _get_fifo_write_handle(filepath: str, timeout: int=10) -> BinaryIO:
+    """
+    Check that FIFO at `filepath` is writable and return high level file handle.
+    If FIFO is not writable after `timeout`, raise `OSError`.
+    """
+    for _ in range(timeout):
+        try:
+            os.close(os.open(filepath, os.O_WRONLY | os.O_NONBLOCK))
+            break
+        except OSError:
+            time.sleep(1)
+    else:
+        raise OSError("FIFO pipe never opened for reading")
+    return open(filepath, "wb")

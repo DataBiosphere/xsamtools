@@ -4,6 +4,7 @@ from uuid import uuid4
 from multiprocessing import cpu_count
 from tempfile import NamedTemporaryFile
 import subprocess
+from typing import Union
 
 from terra_notebook_utils import xprofile, drs
 
@@ -61,26 +62,29 @@ def subsample(src_path: str, dst_path: str, samples):
         reader.close()
         writer.close()
 
-def stats(src_path):
+def stats(src_path: str):
     reader = _get_reader(src_path)
     try:
         _stats(reader.filepath)
     finally:
         reader.close()
 
-def _get_reader(path):
+class _IOStubb:
+    def __init__(self, filepath: str):
+        self.filepath = filepath
+
+    def close(self):
+        pass
+
+def _get_reader(path: str) -> Union[_IOStubb, pipes.BlobReaderProcess]:
     if path.startswith("gs://") or path.startswith("drs://"):
         return pipes.BlobReaderProcess(path)
     else:
-        fh = open(path)
-        fh.filepath = path
-        return fh
+        return _IOStubb(path)
 
-def _get_writer(path):
+def _get_writer(path: str) -> Union[_IOStubb, pipes.BlobWriterProcess]:
     if path.startswith("gs://"):
         bucket, key = path[5:].split("/", 1)
         return pipes.BlobWriterProcess(bucket, key)
     else:
-        fh = open(path, "wb")
-        fh.filepath = path
-        return fh
+        return _IOStubb(path)

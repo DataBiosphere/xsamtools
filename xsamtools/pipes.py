@@ -30,7 +30,7 @@ class BlobReaderProcess(AbstractContextManager):
         else:
             raise ValueError(f"Unsupported schema for url: {url}")
         blob = bucket.get_blob(key)
-        blob_reader = gscio.AsyncReader(blob, chunks_to_buffer=1)
+        blob_reader = gscio.Reader(blob, threads=1)
         fd = os.open(filepath, os.O_WRONLY)
         while True:
             data = bytearray(blob_reader.read(blob_reader.chunk_size))
@@ -65,7 +65,7 @@ class BlobWriterProcess(AbstractContextManager):
 
     def run(self, bucket_name, key, filepath):
         bucket = gs.get_client().bucket(bucket_name)
-        with gscio.Writer(key, bucket) as blob_writer:
+        with gscio.Writer(key, bucket, threads=1) as blob_writer:
             with open(filepath, "rb") as fh:
                 while True:
                     data = fh.read(blob_writer.chunk_size)

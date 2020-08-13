@@ -22,14 +22,14 @@ class BuildPy(build_py.build_py):
             try:
                 _run(["tar", "xjf", "htslib.tar.bz2", "-C", "build"])
                 _run(["tar", "xjf", "bcftools.tar.bz2", "-C", "build"])
-                _run(["tar", "xjf", "samtools-1.10.tar.bz2", "-C", "build"])
+                _run(["tar", "xjf", "samtools.tar.bz2", "-C", "build"])
                 _run(["./configure"], cwd="build/htslib")
-                _run(["./configure"], cwd="build/samtools-1.10")
+                _run(["./configure"], cwd="build/samtools")
                 _run(["make"], cwd="build/htslib")
                 _run(["make"], cwd="build/bcftools")
-                _run(["make"], cwd="build/samtools-1.10")
+                _run(["make"], cwd="build/samtools")
             except subprocess.CalledProcessError:
-                print("Failed to build htslib/bcftools:")
+                print("Failed to build samtools/htslib/bcftools:")
                 traceback.print_exc()
                 raise
 

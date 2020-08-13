@@ -19,7 +19,7 @@ tests:
 package_samtools: clean_samtools samtools.tar.bz2 htslib.tar.bz2 bcftools.tar.bz2
 
 samtools.tar.bz2:
-	git clone --depth 1 -b lons-readers-idx https://github.com/DailyDreaming/samtools
+	git clone --depth 1 -b 1.10 https://github.com/samtools/samtools.git
 	(cd samtools ; rm -rf .git ; autoheader && autoconf)
 	tar cjf samtools.tar.bz2 samtools
 	rm -rf samtools

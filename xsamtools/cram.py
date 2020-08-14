@@ -8,6 +8,7 @@ import os
 import gzip
 import codecs
 import subprocess
+import datetime
 import numpy as np
 
 from uuid import uuid4
@@ -203,9 +204,7 @@ def read_raw_seq_names_from_sam_header(handle):
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 
 
-def read_gs_cram_file_header(gs_path, offset):
-    # TODO: Read as a streamed string
-    output_cram = download_sliced_gs(gs_path=gs_path, ordered_slices=[(0, offset)])
+def read_gs_cram_file_header(output_cram):
     with open(output_cram, "rb") as fh:
         file_definition(fh)
         container_header(fh, show=False)
@@ -242,16 +241,30 @@ def write_intermediate_cram_output(crai_reader, cram_file, regions):
     for line in crai_reader:
         crai_line = CramLocation(*[int(d) for d in line.split("\t")])
         break
-    seq_map = read_gs_cram_file_header(cram_file, offset=crai_line.offset)
-    identifiers = [seq_map[seq_name] for seq_name, num in (s.split(':') for s in regions.split(','))]
+    # TODO: Read as a streamed string
+    if cram_file.startswith('gs://'):
+        local_cram = download_sliced_gs(gs_path=cram_file, ordered_slices=[(0, crai_line.offset)])
+        seq_map = read_gs_cram_file_header(local_cram)
+    else:
+        seq_map = read_gs_cram_file_header(cram_file)
+
+    identifiers = []
+    for region in regions.split(','):
+        if ':' in region:
+            seq_name, num = region.split(':')
+            identifiers.append(seq_map[seq_name])
+        else:
+            identifiers.append(seq_map[region])
+    # identifiers = [seq_map[seq_name] for seq_name, num in (s.split(':') for s in regions.split(','))]
     slices = container_slices(crai_reader, identifiers)
-    return download_sliced_gs(gs_path=cram_file, ordered_slices=slices, output_filename=tmp_cram)
+    download_sliced_gs(gs_path=cram_file, ordered_slices=slices, output_filename=tmp_cram)
+    return tmp_cram, tmp_crai
 
 
-def write_final_file_with_samtools(regions: str, cram_format: bool, output: str):
-    region_args = ' '.join(regions.split(','))
+def write_final_file_with_samtools(cram: str, crai: str, regions: str, cram_format: bool, output: str):
+    region_args = ' '.join(regions.split(',')) if regions else ''
     cram_format = '-C' if cram_format else ''
-    cmd = f'samtools view {cram_format} -X {tmp_cram} {tmp_crai} {region_args} > {output}'
+    cmd = f'samtools view {cram_format} -X {crai} {cram} {region_args} > {output}'
     print(f'Now running: {cmd}')
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = p.communicate()
@@ -275,16 +288,24 @@ def make_crai_available(crai: str):
         raise NotImplementedError(f'Unsupported format: {crai}')
 
 
-def write_cram(reader, cram, regions, output, cram_format):
-    write_intermediate_cram_output(crai_reader=reader, cram_file=cram, regions=regions)
-    write_final_file_with_samtools(regions=regions, cram_format=cram_format, output=output)
+def write_cram(cram, crai, regions, output, cram_format):
+    if regions:
+        with open(tmp_crai, "rb") as fh:
+            with gzip.GzipFile(fileobj=fh) as gzip_reader:
+                with codecs.getreader("ascii")(gzip_reader) as reader:
+                    cram, crai = write_intermediate_cram_output(crai_reader=reader, cram_file=cram, regions=regions)
+
+    write_final_file_with_samtools(cram=cram, crai=crai, regions=regions, cram_format=cram_format, output=output)
 
 
 @xprofile.profile("xsamtools cram view")
 def view(cram: str, crai: str, regions: Optional[str], output: str, cram_format: bool):
+    if not output:
+        time_stamp = str(datetime.datetime.now()).split('.')[0].replace(':', '').replace(' ', '-')
+        extension = 'cram' if cram_format else 'sam'
+        # NOTE: schema output (gs:// or file://) is preserved
+        output = os.path.abspath(f'{time_stamp}.output.{extension}')
+
     make_crai_available(crai=crai)
-    with open(tmp_crai, "rb") as fh:
-        with gzip.GzipFile(fileobj=fh) as gzip_reader:
-            with codecs.getreader("ascii")(gzip_reader) as reader:
-                write_cram(reader=reader, cram=cram, regions=regions, output=output, cram_format=cram_format)
+    write_cram(cram=cram, crai=crai, regions=regions, output=output, cram_format=cram_format)
     return output

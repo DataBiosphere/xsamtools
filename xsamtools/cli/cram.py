@@ -1,9 +1,7 @@
 """
 CRAM file utilities
 """
-import os
 import argparse
-import datetime
 
 from xsamtools import cram
 from xsamtools.cli import dispatch
@@ -32,18 +30,12 @@ cram_cli = dispatch.group("cram")
     # TODO: Allow this to be a google key.
     "--output": dict(type=str,
                      required=False,
-                     help="A local output file path for the generated cram file.  "
-                          "If unspecified, this will be created wherever the input cram file was located.")
+                     help="A local output file path for the generated cram file.")
 })
 def view(args: argparse.Namespace):
     """
     A limited wrapper around "samtools view", but with functions to operate on google cloud bucket keys.
     """
-    extension = 'cram' if args.C else 'sam'
-    if not args.output:
-        time_stamp = str(datetime.datetime.now()).split('.')[0].replace(':', '').replace(' ', '-')
-        # NOTE: schema output (gs:// or file://) is preserved
-        args.output = os.path.abspath(f'{time_stamp}.output.{extension}')
     if '://' in args.output and not args.output.startswith('file://'):
         raise NotImplementedError(f'Schema not yet supported: {args.output}')
     cram.view(cram=args.cram, crai=args.crai, regions=args.regions, output=args.output, cram_format=args.C)

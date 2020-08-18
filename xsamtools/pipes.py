@@ -7,13 +7,14 @@ from concurrent.futures import ProcessPoolExecutor, Future, as_completed
 from typing import Tuple, BinaryIO, Optional
 
 import gs_chunked_io as gscio
-
 from terra_notebook_utils import gs, drs, WORKSPACE_GOOGLE_PROJECT
+
+from xsamtools import gs_utils
 
 
 class BlobReaderProcess(AbstractContextManager):
     def __init__(self, url: str, filepath: str=None):
-        assert url.startswith("gs://") or url.startswith("drs://")
+        _blob_for_url(url, verify_read_access=True)
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
         self.queue = multiprocessing.Manager().Queue()
@@ -24,19 +25,7 @@ class BlobReaderProcess(AbstractContextManager):
 
     @staticmethod
     def run(url: str, filepath: str, queue: multiprocessing.Queue):
-        if url.startswith("gs://"):
-            bucket_name, key = url[5:].split("/", 1)
-            client = gs.get_client()
-            bucket = client.bucket(bucket_name)
-        elif url.startswith("drs://"):
-            client, info = drs.resolve_drs_for_gs_storage(url)
-            drs.enable_requester_pays()
-            bucket = client.bucket(info.bucket_name, user_project=WORKSPACE_GOOGLE_PROJECT)
-            key = info.key
-        else:
-            raise ValueError(f"Unsupported schema for url: {url}")
-
-        blob = bucket.get_blob(key)
+        blob = gs_utils._blob_for_url(url)
         with open(filepath, "wb") as fh:
             with gscio.Reader(blob, threads=1) as blob_reader:
                 while True:
@@ -71,6 +60,7 @@ class BlobReaderProcess(AbstractContextManager):
 
 class BlobWriterProcess(AbstractContextManager):
     def __init__(self, bucket_name: str, key: str, filepath: Optional[str]=None):
+        assert gs_utils._write_access(bucket_name, key)
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
         self.executor = ProcessPoolExecutor(max_workers=1)

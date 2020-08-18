@@ -8,7 +8,7 @@ from typing import Union, Iterable
 
 from terra_notebook_utils import xprofile, drs
 
-from xsamtools import pipes, vcf, samtools
+from xsamtools import pipes, vcf, samtools, gs_utils
 
 
 cores_available = cpu_count()
@@ -84,6 +84,7 @@ class _IOStubb:
 
 def _get_reader(path: str) -> Union[_IOStubb, pipes.BlobReaderProcess]:
     if path.startswith("gs://") or path.startswith("drs://"):
+        gs_utils._blob_for_url(path, verify_read_access=True)
         return pipes.BlobReaderProcess(path)
     else:
         return _IOStubb(path)
@@ -91,6 +92,7 @@ def _get_reader(path: str) -> Union[_IOStubb, pipes.BlobReaderProcess]:
 def _get_writer(path: str) -> Union[_IOStubb, pipes.BlobWriterProcess]:
     if path.startswith("gs://"):
         bucket, key = path[5:].split("/", 1)
+        assert gs_utils._write_access(bucket)
         return pipes.BlobWriterProcess(bucket, key)
     else:
         return _IOStubb(path)

@@ -14,7 +14,6 @@ from xsamtools import gs_utils
 
 class BlobReaderProcess(AbstractContextManager):
     def __init__(self, url: str, filepath: str=None):
-        gs_utils._blob_for_url(url, verify_read_access=True)
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
         self.queue = multiprocessing.Manager().Queue()
@@ -60,7 +59,6 @@ class BlobReaderProcess(AbstractContextManager):
 
 class BlobWriterProcess(AbstractContextManager):
     def __init__(self, bucket_name: str, key: str, filepath: Optional[str]=None):
-        assert gs_utils._write_access(bucket_name)
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
         self.executor = ProcessPoolExecutor(max_workers=1)

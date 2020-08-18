@@ -8,6 +8,7 @@ import unittest
 from uuid import uuid4
 from random import randint
 from contextlib import closing
+from concurrent.futures import ProcessPoolExecutor
 
 # WORKSPACE_NAME and GOOGLE_PROJECT are needed for tnu.drs.enable_requester_pays()
 WORKSPACE_NAME = "terra-notebook-utils-tests"
@@ -34,6 +35,10 @@ class TestXsamtoolsNamedPipes(unittest.TestCase):
     def setUp(self):
         warnings.simplefilter("ignore", UserWarning)
         warnings.simplefilter("ignore", ResourceWarning)
+        self.executor = ProcessPoolExecutor(max_workers=4)
+
+    def tearDown(self):
+        self.executor.shutdown()
 
     def test_blob_reader(self):
         with self.subTest("gs url"):
@@ -42,7 +47,7 @@ class TestXsamtoolsNamedPipes(unittest.TestCase):
             with io.BytesIO(data) as fh:
                 gs.get_client().bucket(WORKSPACE_BUCKET).blob(key).upload_from_file(fh)
             url = f"gs://{WORKSPACE_BUCKET}/{key}"
-            with pipes.BlobReaderProcess(url) as reader:
+            with pipes.BlobReaderProcess(url, self.executor) as reader:
                 handle, first_byte = reader.get_handle()
                 in_data = bytearray(first_byte)
                 with closing(handle):
@@ -63,7 +68,7 @@ class TestXsamtoolsNamedPipes(unittest.TestCase):
                              b'\xe2\xef\xbf\xff\xe6/\x7f\xfb\xf6/_\x7f\xf5\xd9w\x7f\xf0\xe5\x97\xdf\xe9\xa8o\xbf\xf8'
                              b'\xe6\xef\xdf\xf9\xdb\xef\xfe\xfe\xf7/\xfe\xf0\xdd\x7f\xed\x98\xdf\x7f\xfd\xd5\xb7\x7f'
                              b'\xf9\xd3\'\xcc\xef\xff\xfc\x8d\xff\xfe\x97_|\xf5\xa7o\xff\xfcY\x88')
-            with pipes.BlobReaderProcess(url) as reader:
+            with pipes.BlobReaderProcess(url, self.executor) as reader:
                 handle, first_byte = reader.get_handle()
                 data = bytearray(first_byte)
                 with closing(handle):
@@ -73,7 +78,7 @@ class TestXsamtoolsNamedPipes(unittest.TestCase):
     def test_blob_writer(self):
         key = "test_blob_writer_obj"
         data = os.urandom(1024 * 1024 * 50)
-        with pipes.BlobWriterProcess(WORKSPACE_BUCKET, key) as writer:
+        with pipes.BlobWriterProcess(WORKSPACE_BUCKET, key, self.executor) as writer:
             with writer.get_handle() as handle:
                 out_data = bytearray(data)
                 while True:

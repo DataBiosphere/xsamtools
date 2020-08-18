@@ -1,6 +1,7 @@
 include common.mk
 
 MODULES=xsamtools tests
+SAMTOOLS_VERSION=1.10
 
 export TNU_TESTMODE?=workspace_access
 
@@ -16,7 +17,13 @@ tests:
 	PYTHONWARNINGS=ignore:ResourceWarning coverage run --source=xsamtools \
 		-m unittest discover --start-directory tests --top-level-directory . --verbose
 
-package_samtools: clean_samtools htslib.tar.bz2 bcftools.tar.bz2
+package_samtools: clean_samtools samtools.tar.bz2 htslib.tar.bz2 bcftools.tar.bz2
+
+samtools.tar.bz2:
+	git clone --depth 1 -b $(SAMTOOLS_VERSION) https://github.com/samtools/samtools.git
+	(cd samtools ; rm -rf .git ; autoheader && autoconf)
+	tar cjf samtools.tar.bz2 samtools
+	rm -rf samtools
 
 htslib.tar.bz2:
 	git clone --depth 1 -b xbrianh-readers-idx https://github.com/xbrianh/htslib
@@ -31,7 +38,7 @@ bcftools.tar.bz2:
 	rm -rf bcftools
 
 clean_samtools:
-	rm -rf bcftools bcftools.tar.bz2 htslib htslib.tar.bz2
+	rm -rf samtools samtools.tar.bz2 bcftools bcftools.tar.bz2 htslib htslib.tar.bz2
 
 version: xsamtools/version.py
 
@@ -51,18 +58,20 @@ install: build
 	pip install --upgrade dist/*.whl
 
 image:
-	docker build -f ${XVCFMERGE_HOME}/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(XSAMTOOLS_IMAGE_NAME) .
+	docker build -f $(XSAMTOOLS_HOME)/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(XSAMTOOLS_IMAGE_NAME) .
 
 image-force:
-	docker build --no-cache -f ${XVCFMERGE_HOME}/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(XSAMTOOLS_IMAGE_NAME) .
+	docker build --no-cache -f $(XSAMTOOLS_HOME)/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(XSAMTOOLS_IMAGE_NAME) .
 
 publish-image: image
 	docker push $(XSAMTOOLS_IMAGE_NAME)
 
-test-samtools: build/htslib/htsfile build/bcftools/bcftools
+test-samtools: build/samtools/samtools build/htslib/htsfile build/bcftools/bcftools
 build/htslib/htsfile:
 	python setup.py bdist_wheel
 build/bcftools/bcftools:
+	python setup.py bdist_wheel
+build/samtools/samtools:
 	python setup.py bdist_wheel
 
 .PHONY: test lint mypy tests clean sdist build install package_samtools image image-force publish-image

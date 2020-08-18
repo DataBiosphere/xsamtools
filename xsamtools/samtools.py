@@ -3,6 +3,7 @@ import sys
 import typing
 import warnings
 import subprocess
+from typing import Optional
 
 import xsamtools
 
@@ -22,7 +23,8 @@ def _samtools_binary_path(name):
         pass
     # Look for samtools build directory in repo root (useful for issuing commands from repo)
     paths = dict(bcftools=os.path.join(xsamtools.__path__[0], "..", "build", "bcftools", "bcftools"),
-                 htsfile=os.path.join(xsamtools.__path__[0], "..", "build", "htslib", "htsfile"))
+                 htsfile=os.path.join(xsamtools.__path__[0], "..", "build", "htslib", "htsfile"),
+                 samtools=os.path.join(xsamtools.__path__[0], "..", "build", "samtools", "samtools"))
     path = paths[name]
     try:
         _run([path, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -34,5 +36,5 @@ def _samtools_binary_path(name):
 for name in paths:
     paths[name] = _samtools_binary_path(name)
     if paths[name] is None:
-        warnings.warn(f"WARNING: {name} unavailable: htslib or bcftools build failed during installation. "
+        warnings.warn(f"WARNING: {name} unavailable: samtools, htslib, or bcftools build failed during installation. "
                       "          try `pip install -v xsamtools` to diagnose the problem")

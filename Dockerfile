@@ -28,7 +28,9 @@ RUN apt-get update --quiet \
         # htslib deps
         libcurl4-openssl-dev \
         libbz2-dev \
-        liblzma-dev
+        liblzma-dev \
+        # samtools deps
+        libncurses5-dev
 
 # Python
 RUN apt-get install --assume-yes --no-install-recommends \

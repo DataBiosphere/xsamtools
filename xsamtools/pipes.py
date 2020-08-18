@@ -1,5 +1,7 @@
 import os
 import time
+import json
+import logging
 import multiprocessing
 from uuid import uuid4
 from contextlib import AbstractContextManager
@@ -11,6 +13,11 @@ from terra_notebook_utils import gs, drs, WORKSPACE_GOOGLE_PROJECT
 
 from xsamtools import gs_utils
 
+
+logger = logging.getLogger(__name__)
+
+def log_info(**kwargs):
+    logger.info(json.dumps(kwargs, indent=2))
 
 class BlobReaderProcess(AbstractContextManager):
     def __init__(self, url: str, executor: ProcessPoolExecutor, filepath: str=None):
@@ -26,6 +33,7 @@ class BlobReaderProcess(AbstractContextManager):
         blob = gs_utils._blob_for_url(url)
         with open(filepath, "wb") as fh:
             with gscio.Reader(blob, threads=1) as blob_reader:
+                log_info(action="Starting read pipe", url=f"{url}", key=f"{blob.name}", filepath=f"{filepath}")
                 while True:
                     data = bytearray(blob_reader.read(blob_reader.chunk_size))
                     if not data:
@@ -38,6 +46,7 @@ class BlobReaderProcess(AbstractContextManager):
                             data = data[k:]
                         except BrokenPipeError:
                             time.sleep(1)
+        log_info(action="Finished read pipe", url=f"{url}", key=f"{blob.name}", filepath=f"{filepath}")
 
     def get_handle(self) -> Tuple[BinaryIO, bytes]:
         """
@@ -51,6 +60,7 @@ class BlobReaderProcess(AbstractContextManager):
             self._closed = True
             self.queue.put("stop")
             os.unlink(self.filepath)
+        log_info(action="Closing read pipe", filepath=f"{self.filepath}")
 
     def __exit__(self, *args, **kwargs):
         self.close()
@@ -68,11 +78,13 @@ class BlobWriterProcess(AbstractContextManager):
         bucket = gs.get_client().bucket(bucket_name)
         with open(filepath, "rb") as fh:
             with gscio.Writer(key, bucket, threads=1) as blob_writer:
+                log_info(action="Starting write pipe", bucket=f"{bucket_name}", key=f"{key}", filepath=f"{filepath}")
                 while True:
                     data = fh.read(blob_writer.chunk_size)
                     if not data:
                         break
                     blob_writer.write(data)
+        log_info(action="Finished write pipe", bucket=f"{bucket_name}", key=f"{key}", filepath=f"{filepath}")
 
     def get_handle(self) -> BinaryIO:
         """
@@ -87,6 +99,7 @@ class BlobWriterProcess(AbstractContextManager):
             for _ in as_completed([self.future], timeout=300):
                 pass
             os.unlink(self.filepath)
+        log_info(action="Closing write pipe", filepath=f"{self.filepath}")
 
     def __exit__(self, *args, **kwargs):
         self.close()

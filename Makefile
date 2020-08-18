@@ -39,7 +39,7 @@ xsamtools/version.py: setup.py
 	echo "__version__ = '$$(python setup.py --version)'" > $@
 
 clean:
-	git status
+	git clean -dfx
 
 sdist: clean version
 	python setup.py sdist

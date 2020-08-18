@@ -43,6 +43,7 @@ def _stats(input_filepath: str):
 
 @xprofile.profile("combine")
 def combine(src_files: Iterable[str], output_file: str):
+    assert samtools.paths['bcftools']
     readers = [_get_reader(fp) for fp in src_files]
     writer = _get_writer(output_file)
     try:
@@ -54,6 +55,7 @@ def combine(src_files: Iterable[str], output_file: str):
 
 @xprofile.profile("subsample")
 def subsample(src_path: str, dst_path: str, samples):
+    assert samtools.paths['bcftools']
     reader = _get_reader(src_path)
     writer = _get_writer(dst_path)
     try:
@@ -63,6 +65,7 @@ def subsample(src_path: str, dst_path: str, samples):
         writer.close()
 
 def stats(src_path: str):
+    assert samtools.paths['bcftools']
     reader = _get_reader(src_path)
     try:
         _stats(reader.filepath)

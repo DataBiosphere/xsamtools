@@ -4,7 +4,7 @@ from uuid import uuid4
 from multiprocessing import cpu_count
 from tempfile import NamedTemporaryFile
 import subprocess
-from typing import Union, Iterable
+from typing import Union, Sequence
 
 from terra_notebook_utils import xprofile, drs
 
@@ -14,7 +14,7 @@ from xsamtools import pipes, vcf, samtools, gs_utils
 cores_available = cpu_count()
 
 
-def _merge(input_filepaths: Iterable[str], output_filepath: str):
+def _merge(input_filepaths: Sequence[str], output_filepath: str):
     subprocess.run([samtools.paths['bcftools'],
                     "merge",
                     "--no-index",
@@ -24,7 +24,7 @@ def _merge(input_filepaths: Iterable[str], output_filepath: str):
                    + [fp for fp in input_filepaths],
                    check=True)
 
-def _view(input_filepath: str, output_filepath: str, samples: Iterable[str]):
+def _view(input_filepath: str, output_filepath: str, samples: Sequence[str]):
     with NamedTemporaryFile() as tf:
         with open(tf.name, "w") as fh:
             fh.write(os.linesep.join(samples))
@@ -45,7 +45,7 @@ def _stats(input_filepath: str):
                    check=True)
 
 @xprofile.profile("combine")
-def combine(src_files: Iterable[str], output_file: str):
+def combine(src_files: Sequence[str], output_file: str):
     assert samtools.paths['bcftools']
     readers = [_get_reader(fp) for fp in src_files]
     writer = _get_writer(output_file)

@@ -5,6 +5,7 @@ import sys
 import typing
 import warnings
 import unittest
+from uuid import uuid4
 from random import randint
 from contextlib import closing
 
@@ -16,13 +17,15 @@ os.environ['WORKSPACE_NAME'] = WORKSPACE_NAME
 os.environ['GOOGLE_PROJECT'] = GOOGLE_PROJECT
 os.environ['WORKSPACE_BUCKET'] = WORKSPACE_BUCKET
 
+from google.cloud.exceptions import NotFound  # noqa
 from terra_notebook_utils import gs  # noqa
 from terra_notebook_utils.vcf import VCFInfo  # noqa
 
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
-from xsamtools import pipes, samtools  # noqa
+warnings.simplefilter("ignore", UserWarning)
+from xsamtools import pipes, samtools, gs_utils  # noqa
 samtools.paths['bcftools'] = "build/bcftools/bcftools"
 from xsamtools import vcf  # noqa
 
@@ -143,6 +146,28 @@ class TestXsamtools(unittest.TestCase):
                 return False
         return True
 
+class TestGSUtils(unittest.TestCase):
+    def setUp(self):
+        warnings.simplefilter("ignore", ResourceWarning)
+
+    def test_blob_for_url(self):
+        bucket_name = WORKSPACE_BUCKET
+        key = f"{uuid4()}"
+        url = f"gs://{bucket_name}/{key}"
+        gs.get_client().bucket(WORKSPACE_BUCKET).blob(key).upload_from_file(io.BytesIO(b"0"))
+        gs_utils._blob_for_url(url)
+        gs_utils._blob_for_url(url, verify_read_access=True)
+        url = f"gs://{bucket_name}/bogus-key"
+        gs_utils._blob_for_url(url)
+        with self.assertRaises(NotFound):
+            gs_utils._blob_for_url(url, verify_read_access=True)
+
+    def test_write_access(self):
+        tests = [(f"bogus-bucket-{uuid4()}", False),  # fake bucket
+                 ("fc-fe788689-0e09-4797-9e68-d4f78d8daa59", False),  # real bucket, no access
+                 (WORKSPACE_BUCKET, True)]
+        for bucket_name, expected_access in tests:
+            self.assertEqual(expected_access, gs_utils._write_access(bucket_name))
 
 if __name__ == '__main__':
     unittest.main()

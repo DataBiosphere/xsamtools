@@ -21,7 +21,8 @@ def _merge(input_filepaths: Iterable[str], output_filepath: str):
                     "-o", output_filepath,
                     "-O", "z",
                     "--threads", f"{2 * cores_available}"]
-                   + [fp for fp in input_filepaths])
+                   + [fp for fp in input_filepaths],
+                   check=True)
 
 def _view(input_filepath: str, output_filepath: str, samples: Iterable[str]):
     with NamedTemporaryFile() as tf:
@@ -33,13 +34,15 @@ def _view(input_filepath: str, output_filepath: str, samples: Iterable[str]):
                         "-O", "z",
                         "-S", tf.name,
                         "--threads", f"{2 * cores_available}",
-                        input_filepath])
+                        input_filepath],
+                       check=True)
 
 def _stats(input_filepath: str):
     subprocess.run([samtools.paths['bcftools'],
                     "stats",
                     "--threads", f"{2 * cores_available}",
-                    input_filepath])
+                    input_filepath],
+                   check=True)
 
 @xprofile.profile("combine")
 def combine(src_files: Iterable[str], output_file: str):

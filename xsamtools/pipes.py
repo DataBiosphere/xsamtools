@@ -13,12 +13,11 @@ from xsamtools import gs_utils
 
 
 class BlobReaderProcess(AbstractContextManager):
-    def __init__(self, url: str, filepath: str=None):
+    def __init__(self, url: str, executor: ProcessPoolExecutor, filepath: str=None):
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
         self.queue = multiprocessing.Manager().Queue()
-        self.executor = ProcessPoolExecutor(max_workers=1)
-        self.future = self.executor.submit(BlobReaderProcess.run, url, self.filepath, self.queue)
+        self.future = executor.submit(BlobReaderProcess.run, url, self.filepath, self.queue)
         self.future.add_done_callback(check_future_result)
         self._closed = False
 
@@ -51,18 +50,16 @@ class BlobReaderProcess(AbstractContextManager):
         if not self._closed:
             self._closed = True
             self.queue.put("stop")
-            self.executor.shutdown(wait=True)
             os.unlink(self.filepath)
 
     def __exit__(self, *args, **kwargs):
         self.close()
 
 class BlobWriterProcess(AbstractContextManager):
-    def __init__(self, bucket_name: str, key: str, filepath: Optional[str]=None):
+    def __init__(self, bucket_name: str, key: str, executor: ProcessPoolExecutor, filepath: Optional[str]=None):
         self.filepath = filepath or f"/tmp/{uuid4()}"
         os.mkfifo(self.filepath)
-        self.executor = ProcessPoolExecutor(max_workers=1)
-        self.future = self.executor.submit(BlobWriterProcess.run, bucket_name, key, self.filepath)
+        self.future = executor.submit(BlobWriterProcess.run, bucket_name, key, self.filepath)
         self.future.add_done_callback(check_future_result)
         self._closed = False
 
@@ -89,7 +86,6 @@ class BlobWriterProcess(AbstractContextManager):
             self._closed = True
             for _ in as_completed([self.future], timeout=300):
                 pass
-            self.executor.shutdown()
             os.unlink(self.filepath)
 
     def __exit__(self, *args, **kwargs):

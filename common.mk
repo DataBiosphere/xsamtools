@@ -38,12 +38,14 @@ pypi_release:
 	twine upload dist/*
 
 image:
-	docker build -f $(XSAMTOOLS_HOME)/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(XSAMTOOLS_IMAGE_BASE_NAME) .
+	$(eval export IMAGE_NAME=$(shell $(XSAMTOOLS_HOME)/docker_scripts/image_tag.sh))
+	docker build -f $(XSAMTOOLS_HOME)/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(IMAGE_NAME) .
 
 image-force:
-	docker build --no-cache -f $(XSAMTOOLS_HOME)/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(XSAMTOOLS_IMAGE_BASE_NAME) .
+	$(eval export IMAGE_NAME=$(shell $(XSAMTOOLS_HOME)/docker_scripts/image_tag.sh))
+	docker build --no-cache -f $(XSAMTOOLS_HOME)/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(IMAGE_NAME) .
 
 publish-image: image
-	docker push $(XSAMTOOLS_IMAGE_BASE_NAME)
+	docker push $(IMAGE_NAME)
 
 .PHONY: release image image-force publish-image

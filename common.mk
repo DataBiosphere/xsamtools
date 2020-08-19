@@ -37,15 +37,4 @@ pypi_release:
 	python setup.py sdist
 	twine upload dist/*
 
-undo:
-	$(eval export TAG=$(shell git describe --tags --match 'v*.*.*'))
-	@echo -e "DANGEROUS - DO NOT USE!\nAbout to delete tag/commit for $(TAG)\nPress enter to continue or Ctrl-C to exit."
-	@read x
-	$(eval export TAG=$(shell git describe --tags --match 'v*.*.*'))
-	@if [[ -z $$TAG ]]; then echo "Can't find last release"; exit 1; fi
-	git push origin :refs/tags/$(TAG)
-	git tag -d $(TAG)
-	git reset --hard HEAD^
-	git push -f
-
 .PHONY: release

@@ -37,4 +37,13 @@ pypi_release:
 	python setup.py sdist
 	twine upload dist/*
 
-.PHONY: release
+image:
+	docker build -f $(XSAMTOOLS_HOME)/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(XSAMTOOLS_IMAGE_NAME) .
+
+image-force:
+	docker build --no-cache -f $(XSAMTOOLS_HOME)/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(XSAMTOOLS_IMAGE_NAME) .
+
+publish-image: image
+	docker push $(XSAMTOOLS_IMAGE_NAME)
+
+.PHONY: release image image-force publish-image

@@ -57,15 +57,6 @@ build: clean version
 install: build
 	pip install --upgrade dist/*.whl
 
-image:
-	docker build -f $(XSAMTOOLS_HOME)/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(XSAMTOOLS_IMAGE_NAME) .
-
-image-force:
-	docker build --no-cache -f $(XSAMTOOLS_HOME)/Dockerfile --build-arg XSAMTOOLS_DOCKER_USER --build-arg XSAMTOOLS_HOME -t $(XSAMTOOLS_IMAGE_NAME) .
-
-publish-image: image
-	docker push $(XSAMTOOLS_IMAGE_NAME)
-
 test-samtools: build/samtools/samtools build/htslib/htsfile build/bcftools/bcftools
 build/htslib/htsfile:
 	python setup.py bdist_wheel
@@ -74,4 +65,4 @@ build/bcftools/bcftools:
 build/samtools/samtools:
 	python setup.py bdist_wheel
 
-.PHONY: test lint mypy tests clean sdist build install package_samtools image image-force publish-image
+.PHONY: test lint mypy tests clean sdist build install package_samtools

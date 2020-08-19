@@ -5,5 +5,5 @@ export XSAMTOOLS_HOME="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 
 set -a
 XSAMTOOLS_DOCKER_USER="xsamtools"  # name of user created in Dockerfile
-XSAMTOOLS_IMAGE_BASE_NAME="xbrianh/xsamtools"
+XSAMTOOLS_DOCKER_REPO="xbrianh/xsamtools"
 set +a

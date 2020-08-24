@@ -160,12 +160,7 @@ class TestGSUtils(unittest.TestCase):
         key = f"{uuid4()}"
         url = f"gs://{bucket_name}/{key}"
         gs.get_client().bucket(WORKSPACE_BUCKET).blob(key).upload_from_file(io.BytesIO(b"0"))
-        gs_utils._blob_for_url(url)
-        gs_utils._blob_for_url(url, verify_read_access=True)
-        url = f"gs://{bucket_name}/bogus-key"
-        gs_utils._blob_for_url(url)
-        with self.assertRaises(NotFound):
-            gs_utils._blob_for_url(url, verify_read_access=True)
+        self.assertIsNotNone(gs_utils._blob_for_url(url))
 
     def test_read_access(self):
         bucket_name = WORKSPACE_BUCKET

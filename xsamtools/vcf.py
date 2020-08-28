@@ -48,6 +48,7 @@ def _stats(input_filepath: str):
 @xprofile.profile("combine")
 def combine(src_files: Sequence[str], output_file: str):
     assert samtools.paths['bcftools']
+    gs_utils._assert_access(src_files, [output_file])
     with ProcessPoolExecutor(max_workers=len(src_files) + 1) as e:
         readers = [_get_reader(fp, e) for fp in src_files]
         writer = _get_writer(output_file, e)
@@ -61,6 +62,7 @@ def combine(src_files: Sequence[str], output_file: str):
 @xprofile.profile("subsample")
 def subsample(src_path: str, dst_path: str, samples):
     assert samtools.paths['bcftools']
+    gs_utils._assert_access([src_path], [dst_path])
     with ProcessPoolExecutor(max_workers=2) as e:
         reader = _get_reader(src_path, e)
         writer = _get_writer(dst_path, e)
@@ -72,6 +74,7 @@ def subsample(src_path: str, dst_path: str, samples):
 
 def stats(src_path: str):
     assert samtools.paths['bcftools']
+    gs_utils._assert_access([src_path], [])
     with ProcessPoolExecutor() as e:
         reader = _get_reader(src_path, e)
         try:
@@ -88,7 +91,6 @@ class _IOStubb:
 
 def _get_reader(path: str, executor: ProcessPoolExecutor) -> Union[_IOStubb, pipes.BlobReaderProcess]:
     if path.startswith("gs://") or path.startswith("drs://"):
-        gs_utils._blob_for_url(path, verify_read_access=True)
         return pipes.BlobReaderProcess(path, executor)
     else:
         return _IOStubb(path)
@@ -96,7 +98,6 @@ def _get_reader(path: str, executor: ProcessPoolExecutor) -> Union[_IOStubb, pip
 def _get_writer(path: str, executor: ProcessPoolExecutor) -> Union[_IOStubb, pipes.BlobWriterProcess]:
     if path.startswith("gs://"):
         bucket, key = path[5:].split("/", 1)
-        assert gs_utils._write_access(bucket)
         return pipes.BlobWriterProcess(bucket, key, executor)
     else:
         return _IOStubb(path)

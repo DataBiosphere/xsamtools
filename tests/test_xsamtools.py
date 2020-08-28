@@ -167,6 +167,16 @@ class TestGSUtils(unittest.TestCase):
         with self.assertRaises(NotFound):
             gs_utils._blob_for_url(url, verify_read_access=True)
 
+    def test_read_access(self):
+        bucket_name = WORKSPACE_BUCKET
+        key = f"{uuid4()}"
+        gs.get_client().bucket(WORKSPACE_BUCKET).blob(key).upload_from_file(io.BytesIO(b"0"))
+        url = f"gs://{bucket_name}/{key}"
+        self.assertTrue(gs_utils._read_access(url))
+        url = f"gs://{bucket_name}/bogus-key"
+        gs_utils._blob_for_url(url)
+        self.assertFalse(gs_utils._read_access(url))
+
     def test_write_access(self):
         tests = [(f"bogus-bucket-{uuid4()}", False),  # fake bucket
                  ("fc-fe788689-0e09-4797-9e68-d4f78d8daa59", False),  # real bucket, no access

@@ -9,6 +9,7 @@ from uuid import uuid4
 from random import randint
 from contextlib import closing
 from concurrent.futures import ProcessPoolExecutor
+from typing import IO
 
 # WORKSPACE_NAME and GOOGLE_PROJECT are needed for tnu.drs.enable_requester_pays()
 WORKSPACE_NAME = "terra-notebook-utils-tests"
@@ -31,6 +32,28 @@ samtools.paths['bcftools'] = "build/bcftools/bcftools"
 from xsamtools import vcf  # noqa
 
 
+class PIPETestException(Exception):
+    pass
+
+class TestPipe(pipes.FIFOPipeProcess):
+    def __init__(self, *args, should_open=True, **kwargs):
+        self.should_open = should_open
+        super().__init__(*args,
+                         subprocess_handle_timeout_seconds=2,
+                         handle_timeout_seconds=2,
+                         **kwargs)
+
+    def run(self, fh: IO):
+        if self.should_open:
+            if "wb" == self.mode[:2]:
+                fh.write(b"smurfs")
+            elif "rb" == self.mode[:2]:
+                assert b"squids" == fh.read(20)
+            else:
+                raise Exception("something got misconfigured")
+        else:
+            raise PIPETestException()
+
 class TestXsamtoolsNamedPipes(unittest.TestCase):
     def setUp(self):
         warnings.simplefilter("ignore", UserWarning)
@@ -39,6 +62,39 @@ class TestXsamtoolsNamedPipes(unittest.TestCase):
 
     def tearDown(self):
         self.executor.shutdown()
+
+    def test_fifo_pipe_process(self):
+        with self.subTest("read pipe opens"):
+            p = TestPipe(self.executor, mode="wb->rb", should_open=True)
+            with p.get_handle() as fh:
+                self.assertEqual(b"smurfs", fh.read())
+            p.close()
+
+        with self.subTest("write pipe opens"):
+            p = TestPipe(self.executor, mode="rb<-wb", should_open=True)
+            with p.get_handle() as fh:
+                fh.write(b"squids")
+            p.close()
+
+        with self.subTest("read pipe raises"):
+            with self.assertRaises(PIPETestException):
+                with TestPipe(self.executor, mode="wb->rb", should_open=False):
+                    pass
+
+        with self.subTest("write pipe raises"):
+            with self.assertRaises(PIPETestException):
+                with TestPipe(self.executor, mode="rb<-wb", should_open=False):
+                    pass
+
+        with self.subTest("read pipe deadlocks"):
+            with self.assertRaises(pipes.FIFOBrokenPipeException):
+                p = TestPipe(self.executor, mode="wb->rb", should_open=True)
+                p.close()
+
+        with self.subTest("write pipe deadlocks"):
+            with self.assertRaises(pipes.FIFOBrokenPipeException):
+                p = TestPipe(self.executor, mode="rb<-wb", should_open=True)
+                p.close()
 
     def test_blob_reader(self):
         with self.subTest("gs url"):

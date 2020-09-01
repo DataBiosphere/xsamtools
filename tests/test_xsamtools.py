@@ -2,14 +2,12 @@
 import io
 import os
 import sys
-import typing
-import warnings
 import unittest
 from uuid import uuid4
 from random import randint
 from contextlib import closing
 from concurrent.futures import ProcessPoolExecutor
-from typing import IO
+from typing import List, IO
 
 # WORKSPACE_NAME and GOOGLE_PROJECT are needed for tnu.drs.enable_requester_pays()
 WORKSPACE_NAME = "terra-notebook-utils-tests"
@@ -26,16 +24,16 @@ from terra_notebook_utils.vcf import VCFInfo  # noqa
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
-warnings.simplefilter("ignore", UserWarning)
 from xsamtools import pipes, samtools, gs_utils  # noqa
 samtools.paths['bcftools'] = "build/bcftools/bcftools"
 from xsamtools import vcf  # noqa
+from tests.infra import SuppressWarningsMixin  # noqa
 
 
 class PIPETestException(Exception):
     pass
 
-class TestPipe(pipes.FIFOPipeProcess):
+class TestPipe(SuppressWarningsMixin, pipes.FIFOPipeProcess):
     def __init__(self, *args, should_open=True, **kwargs):
         self.should_open = should_open
         super().__init__(*args,
@@ -54,10 +52,8 @@ class TestPipe(pipes.FIFOPipeProcess):
         else:
             raise PIPETestException()
 
-class TestXsamtoolsNamedPipes(unittest.TestCase):
+class TestXsamtoolsNamedPipes(SuppressWarningsMixin, unittest.TestCase):
     def setUp(self):
-        warnings.simplefilter("ignore", UserWarning)
-        warnings.simplefilter("ignore", ResourceWarning)
         self.executor = ProcessPoolExecutor(max_workers=4)
 
     def tearDown(self):
@@ -151,13 +147,7 @@ class TestXsamtoolsNamedPipes(unittest.TestCase):
             self.assertEqual(fh.getvalue(), data)
 
 
-class TestXsamtools(unittest.TestCase):
-    def setUp(self):
-        # Suppress the annoying google gcloud _CLOUD_SDK_CREDENTIALS_WARNING warnings
-        warnings.filterwarnings("ignore", "Your application has authenticated using end user credentials")
-        # Suppress unclosed socket warnings
-        warnings.simplefilter("ignore", ResourceWarning)
-
+class TestXsamtools(SuppressWarningsMixin, unittest.TestCase):
     def test_combine(self):
         with self.subTest("test cloud locations"):
             inputs = [f"gs://{WORKSPACE_BUCKET}/test_vcfs/{n}.vcf.gz" for n in "ab"]
@@ -199,7 +189,7 @@ class TestXsamtools(unittest.TestCase):
         for name in VCFInfo.columns:
             self.assertEqual(getattr(info, name), getattr(expected_info, name))
 
-    def _headers_equal(self, header_a: typing.List[str], header_b: typing.List[str]) -> bool:
+    def _headers_equal(self, header_a: List[str], header_b: List[str]) -> bool:
         for a, b in zip(header_a, header_b):
             if "bcftools" in a:
                 continue
@@ -207,10 +197,7 @@ class TestXsamtools(unittest.TestCase):
                 return False
         return True
 
-class TestGSUtils(unittest.TestCase):
-    def setUp(self):
-        warnings.simplefilter("ignore", ResourceWarning)
-
+class TestGSUtils(SuppressWarningsMixin, unittest.TestCase):
     def test_blob_for_url(self):
         bucket_name = WORKSPACE_BUCKET
         key = f"{uuid4()}"

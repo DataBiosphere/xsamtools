@@ -121,17 +121,16 @@ class TestXsamtoolsNamedPipes(SuppressWarningsMixin, unittest.TestCase):
     def test_blob_writer(self):
         key = "test_blob_writer_obj"
         data = os.urandom(1024 * 1024 * 50)
-        with pipes.BlobWriterProcess(WORKSPACE_BUCKET, key, self.executor) as writer:
-            with writer.get_handle() as handle:
-                out_data = bytearray(data)
-                while True:
-                    chunk_size = randint(1024, 1024 * 1024)
-                    to_write = out_data[:chunk_size]
-                    out_data = out_data[chunk_size:]
-                    if to_write:
-                        handle.write(to_write)
-                    else:
-                        break
+        with pipes.BlobWriterProcess(WORKSPACE_BUCKET, key, self.executor) as handle:
+            out_data = bytearray(data)
+            while True:
+                chunk_size = randint(1024, 1024 * 1024)
+                to_write = out_data[:chunk_size]
+                out_data = out_data[chunk_size:]
+                if to_write:
+                    handle.write(to_write)
+                else:
+                    break
 
         with io.BytesIO() as fh:
             gs.get_client().bucket(WORKSPACE_BUCKET).get_blob(key).download_to_file(fh)

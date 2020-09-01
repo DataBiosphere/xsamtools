@@ -162,44 +162,25 @@ class BlobReaderProcess(FIFOPipeProcess):
     def __exit__(self, *args, **kwargs):
         self.close()
 
-class BlobWriterProcess(AbstractContextManager):
-    def __init__(self, bucket_name: str, key: str, executor: ProcessPoolExecutor, filepath: Optional[str]=None):
-        self.filepath = filepath or f"/tmp/{uuid4()}"
-        os.mkfifo(self.filepath)
-        self.future = executor.submit(BlobWriterProcess.run, bucket_name, key, self.filepath)
-        self.future.add_done_callback(check_future_result)
-        self._closed = False
+class BlobWriterProcess(FIFOPipeProcess):
+    def __init__(self, bucket_name: str, key: str, executor: ProcessPoolExecutor):
+        self.bucket_name = bucket_name
+        self.key = key
+        super().__init__(executor, mode="rb<-wb")
+        log_info(action="Opening blob writer FIFO",
+                 mode=self.mode,
+                 bucket=bucket_name,
+                 key=key,
+                 filepath=f"{self.filepath}")
 
-    @staticmethod
-    def run(bucket_name: str, key: str, filepath: str):
-        bucket = gs.get_client().bucket(bucket_name)
-        with open(filepath, "rb") as fh:
-            with gscio.Writer(key, bucket, threads=1) as blob_writer:
-                log_info(action="Starting write pipe", bucket=f"{bucket_name}", key=f"{key}", filepath=f"{filepath}")
-                while True:
-                    data = fh.read(blob_writer.chunk_size)
-                    if not data:
-                        break
-                    blob_writer.write(data)
-        log_info(action="Finished write pipe", bucket=f"{bucket_name}", key=f"{key}", filepath=f"{filepath}")
-
-    def get_handle(self) -> BinaryIO:
-        """
-        Get writable handle while avoiding FIFO deadlocks.
-        See: https://stackoverflow.com/questions/5782279/why-does-a-read-only-open-of-a-named-pipe-block
-        """
-        return _get_fifo_write_handle(self.filepath)
-
-    def close(self, timeout: int=300):
-        if not self._closed:
-            self._closed = True
-            for _ in as_completed([self.future], timeout=300):
-                pass
-            os.unlink(self.filepath)
-        log_info(action="Closing write pipe", filepath=f"{self.filepath}")
-
-    def __exit__(self, *args, **kwargs):
-        self.close()
+    def run(self, fh: IO):
+        bucket = gs.get_client().bucket(self.bucket_name)
+        with gscio.Writer(self.key, bucket, threads=1) as blob_writer:
+            while True:
+                data = fh.read(blob_writer.chunk_size)
+                if not data:
+                    break
+                blob_writer.write(data)
 
 def check_future_result(f: Future):
     try:

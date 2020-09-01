@@ -91,21 +91,19 @@ class TestXsamtoolsNamedPipes(SuppressWarningsMixin, unittest.TestCase):
     def test_blob_reader(self):
         with self.subTest("gs url"):
             key = "test_blob_reader_obj"
-            data = os.urandom(1024 * 1024 * 50)
-            with io.BytesIO(data) as fh:
+            expected_data = os.urandom(1024 * 1024 * 50)
+            with io.BytesIO(expected_data) as fh:
                 gs.get_client().bucket(WORKSPACE_BUCKET).blob(key).upload_from_file(fh)
             url = f"gs://{WORKSPACE_BUCKET}/{key}"
-            with pipes.BlobReaderProcess(url, self.executor) as reader:
-                handle, first_byte = reader.get_handle()
-                in_data = bytearray(first_byte)
-                with closing(handle):
-                    while True:
-                        d = handle.read(randint(1024, 1024 * 1024))
-                        if d:
-                            in_data += d
-                        else:
-                            break
-            self.assertEqual(data, in_data)
+            with pipes.BlobReaderProcess(url, self.executor) as handle:
+                data = bytearray()
+                while True:
+                    d = handle.read(randint(1024, 1024 * 1024))
+                    if d:
+                        data += d
+                    else:
+                        break
+            self.assertEqual(expected_data, data)
         with self.subTest("drs url"):
             url = "drs://dg.4503/57f58130-2d66-4d46-9b2b-539f7e6c2080"
             expected_data = (b'\x1f\x8b\x08\x04\x00\x00\x00\x00\x00\xff\x06\x00BC\x02\x00\xd7$\x8d][\xcf-9q}\xcf\xaf@'
@@ -116,11 +114,8 @@ class TestXsamtoolsNamedPipes(SuppressWarningsMixin, unittest.TestCase):
                              b'\xe2\xef\xbf\xff\xe6/\x7f\xfb\xf6/_\x7f\xf5\xd9w\x7f\xf0\xe5\x97\xdf\xe9\xa8o\xbf\xf8'
                              b'\xe6\xef\xdf\xf9\xdb\xef\xfe\xfe\xf7/\xfe\xf0\xdd\x7f\xed\x98\xdf\x7f\xfd\xd5\xb7\x7f'
                              b'\xf9\xd3\'\xcc\xef\xff\xfc\x8d\xff\xfe\x97_|\xf5\xa7o\xff\xfcY\x88')
-            with pipes.BlobReaderProcess(url, self.executor) as reader:
-                handle, first_byte = reader.get_handle()
-                data = bytearray(first_byte)
-                with closing(handle):
-                    data += handle.read(len(expected_data) - len(data))
+            with pipes.BlobReaderProcess(url, self.executor) as handle:
+                data = handle.read(len(expected_data))
             self.assertEqual(data[:len(expected_data)], expected_data)
 
     def test_blob_writer(self):

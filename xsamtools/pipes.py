@@ -129,51 +129,33 @@ class FIFOPipeProcess(AbstractContextManager):
     def __exit__(self, *args, **kwargs):
         self.close()
 
-class BlobReaderProcess(AbstractContextManager):
-    def __init__(self, url: str, executor: ProcessPoolExecutor, filepath: str=None):
-        self.filepath = filepath or f"/tmp/{uuid4()}"
-        os.mkfifo(self.filepath)
-        self.queue = multiprocessing.Manager().Queue()
-        self.future = executor.submit(BlobReaderProcess.run, url, self.filepath, self.queue)
-        self.future.add_done_callback(check_future_result)
-        self._closed = False
+class BlobReaderProcess(FIFOPipeProcess):
+    def __init__(self, url: str, executor: ProcessPoolExecutor):
+        self.url = url
+        self._shared_dict = FIFOPipeProcess.get_manager().dict()
+        super().__init__(executor, mode="wb->rb")
+        log_info(action="Opening blob reader FIFO", mode=self.mode, url=url, filepath=f"{self.filepath}")
 
-    @staticmethod
-    def run(url: str, filepath: str, queue: multiprocessing.Queue):
-        blob = gs_utils._blob_for_url(url)
-        with open(filepath, "wb") as fh:
-            with gscio.Reader(blob, threads=1) as blob_reader:
-                log_info(action="Starting read pipe", url=f"{url}", key=f"{blob.name}", filepath=f"{filepath}")
-                while True:
-                    data = bytearray(blob_reader.read(blob_reader.chunk_size))
-                    if not data:
-                        break
-                    while data:
-                        if not queue.empty() and queue.get_nowait():
-                            return
-                        try:
-                            k = fh.write(data)
-                            data = data[k:]
-                        except BrokenPipeError:
-                            time.sleep(1)
-        log_info(action="Finished read pipe", url=f"{url}", key=f"{blob.name}", filepath=f"{filepath}")
-
-    def get_handle(self) -> Tuple[BinaryIO, bytes]:
-        """
-        Get readable handle while avoiding FIFO deadlocks.
-        See: https://stackoverflow.com/questions/5782279/why-does-a-read-only-open-of-a-named-pipe-block
-        """
-        return _get_fifo_read_handle(self.filepath)
+    def run(self, fh: IO):
+        blob = gs_utils._blob_for_url(self.url)
+        with gscio.Reader(blob, threads=1) as blob_reader:
+            while True:
+                data = bytearray(blob_reader.read(blob_reader.chunk_size))
+                if not data:
+                    break
+                while data:
+                    if self._shared_dict.get('stop'):
+                        return
+                    try:
+                        k = fh.write(data)
+                        data = data[k:]
+                    except BrokenPipeError:
+                        time.sleep(1)
 
     def close(self):
         if not self._closed:
-            self._closed = True
-            self.queue.put("stop")
-            os.unlink(self.filepath)
-        log_info(action="Closing read pipe", filepath=f"{self.filepath}")
-
-    def __exit__(self, *args, **kwargs):
-        self.close()
+            self._shared_dict['stop'] = True
+            super().close()
 
 class BlobWriterProcess(AbstractContextManager):
     def __init__(self, bucket_name: str, key: str, executor: ProcessPoolExecutor, filepath: Optional[str]=None):

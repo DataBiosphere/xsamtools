@@ -47,6 +47,10 @@ ENV LC_ALL C.UTF-8
 # gcloud
 RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg  add - && apt-get update -y && apt-get install google-cloud-sdk -y
 
+# Downgrade setuptools for firecloud installation
+# https://github.com/broadinstitute/fiss/issues/147
+RUN pip3 install --upgrade setuptools==49.6.0
+
 # xsamtools (includes htslib and bcftools)
 COPY ${XSAMTOOLS_HOME} xsamtools_repo
 RUN (cd xsamtools_repo ; pip3 install .)

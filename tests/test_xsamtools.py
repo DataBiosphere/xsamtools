@@ -3,6 +3,7 @@ import io
 import os
 import sys
 import unittest
+from subprocess import CalledProcessError
 from typing import List
 
 # WORKSPACE_NAME and GOOGLE_PROJECT are needed for tnu.drs.enable_requester_pays()
@@ -27,20 +28,25 @@ from tests.infra import SuppressWarningsMixin  # noqa
 
 class TestXsamtools(SuppressWarningsMixin, unittest.TestCase):
     def test_combine(self):
-        with self.subTest("test cloud locations"):
+        with self.subTest("cloud locations"):
             inputs = [f"gs://{WORKSPACE_BUCKET}/test_vcfs/{n}.vcf.gz" for n in "ab"]
-            output = "test_bcftools_combined.vcf.gz"
+            output = f"gs://{WORKSPACE_BUCKET}/test_bcftools_combined.vcf.gz"
             vcf.combine(inputs, output)
-            blob = gs.get_client().bucket(WORKSPACE_BUCKET).blob(output)
+            blob = gs.get_client().bucket(WORKSPACE_BUCKET).blob("test_bcftools_combined.vcf.gz")
             info = VCFInfo.with_blob(blob)
             self._assert_vcf_info(info)
-        with self.subTest("test local paths"):
+        with self.subTest("local paths"):
             inputs = ["tests/fixtures/a.vcf.gz", "tests/fixtures/b.vcf.gz"]
             output = "test_bcftools_combined.vcf.gz"
             vcf.combine(inputs, output)
-            blob = gs.get_client().bucket(WORKSPACE_BUCKET).blob(output)
-            info = VCFInfo.with_blob(blob)
+            info = VCFInfo.with_file(output)
             self._assert_vcf_info(info)
+        with self.subTest("bad input"):
+            with self.assertRaises(CalledProcessError):
+                inputs = [f"gs://{WORKSPACE_BUCKET}/test_vcfs/{n}.vcf.gz" for n in "ab"]
+                inputs.append(f"gs://{WORKSPACE_BUCKET}/test_vcfs/broken.vcf.gz")
+                output = "test_bcftools_combined.vcf.gz"
+                vcf.combine(inputs, output)
 
     def test_subsample(self):
         samples = ["NWD994242", "NWD637453"]

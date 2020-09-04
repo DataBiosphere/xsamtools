@@ -21,10 +21,6 @@ from google.cloud.storage.client import Client
 from terra_notebook_utils import xprofile, drs
 
 client = Client(project="platform-dev")
-tmp_staging_dir = f'/tmp/{uuid4()}/'
-os.makedirs(tmp_staging_dir)
-tmp_cram = os.path.join(tmp_staging_dir, f'tmp.cram')
-tmp_crai = os.path.join(tmp_staging_dir, f'tmp.crai')
 
 
 def download_gs(gs_path: str, output_filename: str = None):
@@ -201,9 +197,6 @@ def read_raw_seq_names_from_sam_header(handle):
     return sequence_names
 
 
-CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
-
-
 def read_gs_cram_file_header(output_cram):
     with open(output_cram, "rb") as fh:
         file_definition(fh)
@@ -212,12 +205,11 @@ def read_gs_cram_file_header(output_cram):
     return seq_map
 
 
-def container_slices(crai_reader, identifiers):
+def container_slices(crai_indices, identifiers):
     slices = []
     slice_start = 0
     header_only_section = False
-    for i, line in enumerate(crai_reader):
-        crai_line = CramLocation(*[int(d) for d in line.split("\t")])
+    for i, crai_line in enumerate(crai_indices):
         slice_end = crai_line.offset
         if header_only_section:
             slices.append((slice_start, slice_start + 200))
@@ -237,13 +229,11 @@ def container_slices(crai_reader, identifiers):
     return slices
 
 
-def write_intermediate_cram_output(crai_reader, cram_file, regions):
-    for line in crai_reader:
-        crai_line = CramLocation(*[int(d) for d in line.split("\t")])
-        break
+def write_intermediate_cram_output(crai_indices, cram_file, cram_output_name, regions):
+    first_crai_index = crai_indices[0]
     # TODO: Read as a streamed string
     if cram_file.startswith('gs://'):
-        local_cram = download_sliced_gs(gs_path=cram_file, ordered_slices=[(0, crai_line.offset)])
+        local_cram = download_sliced_gs(gs_path=cram_file, ordered_slices=[(0, first_crai_index.offset)])
         seq_map = read_gs_cram_file_header(local_cram)
     else:
         seq_map = read_gs_cram_file_header(cram_file)
@@ -252,19 +242,22 @@ def write_intermediate_cram_output(crai_reader, cram_file, regions):
     for region in regions.split(','):
         if ':' in region:
             seq_name, num = region.split(':')
-            identifiers.append(seq_map[seq_name])
-        else:
+            region = seq_name
+
+        # If region is not present in seq_map (produced from the crai index),
+        # then the user specified an identifier not present in the data.
+        # Ignore here by not adding it and let samtools catch the error downstream.
+        if region in seq_map:
             identifiers.append(seq_map[region])
-    # identifiers = [seq_map[seq_name] for seq_name, num in (s.split(':') for s in regions.split(','))]
-    slices = container_slices(crai_reader, identifiers)
-    download_sliced_gs(gs_path=cram_file, ordered_slices=slices, output_filename=tmp_cram)
-    return tmp_cram, tmp_crai
+
+    slices = container_slices(crai_indices, identifiers)
+    download_sliced_gs(gs_path=cram_file, ordered_slices=slices, output_filename=cram_output_name)
 
 
 def write_final_file_with_samtools(cram: str, crai: str, regions: str, cram_format: bool, output: str):
     region_args = ' '.join(regions.split(',')) if regions else ''
     cram_format = '-C' if cram_format else ''
-    cmd = f'samtools view {cram_format} -X {crai} {cram} {region_args} > {output}'
+    cmd = f'samtools view {cram_format} {cram} -X {crai} {region_args} > {output}'
     print(f'Now running: {cmd}')
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = p.communicate()
@@ -275,37 +268,73 @@ def write_final_file_with_samtools(cram: str, crai: str, regions: str, cram_form
         print(f'Output CRAM successfully generated at: {output}')
 
 
-def make_crai_available(crai: str):
+def make_crai_available(crai: str, output: str):
     if crai.startswith('gs://'):
-        download_gs(crai, output_filename=tmp_crai)
+        download_gs(crai, output_filename=output)
     elif crai.startswith('file://'):
-        os.link(crai[len('file://'):], tmp_crai)
+        os.link(crai[len('file://'):], output)
     elif crai.startswith('http://') or crai.startswith('https://'):
-        urlretrieve(crai, tmp_crai)
+        urlretrieve(crai, output)
     elif '://' not in crai:
-        os.link(crai, tmp_crai)
+        os.link(crai, output)
     else:
         raise NotImplementedError(f'Unsupported format: {crai}')
 
 
-def write_cram(cram, crai, regions, output, cram_format):
-    if regions:
-        with open(tmp_crai, "rb") as fh:
-            with gzip.GzipFile(fileobj=fh) as gzip_reader:
-                with codecs.getreader("ascii")(gzip_reader) as reader:
-                    cram, crai = write_intermediate_cram_output(crai_reader=reader, cram_file=cram, regions=regions)
+def get_crai_indices(crai):
+    CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
+
+    crai_indices = []
+    with open(crai, "rb") as fh:
+        with gzip.GzipFile(fileobj=fh) as gzip_reader:
+            with codecs.getreader("ascii")(gzip_reader) as reader:
+                for line in reader:
+                    crai_indices.append(CramLocation(*[int(d) for d in line.split("\t")]))
+    return crai_indices
+
+
+def write_cram(cram: str, staged_cram_name: str, crai: str, regions: Optional[str], output: str, cram_format: bool = True):
+    if cram.startswith('gs://'):
+        # attempt to only download the relevant portions/slices of the file
+        if regions:
+            crai_indices = get_crai_indices(crai)
+            write_intermediate_cram_output(crai_indices=crai_indices,
+                                           cram_file=cram,
+                                           cram_output_name=staged_cram_name,
+                                           regions=regions)
+        # if there is no subset of regions specified, we need to download the entire cram file
+        else:
+            download_gs(cram, output_filename=staged_cram_name)
+        cram = staged_cram_name
 
     write_final_file_with_samtools(cram=cram, crai=crai, regions=regions, cram_format=cram_format, output=output)
 
 
 @xprofile.profile("xsamtools cram view")
-def view(cram: str, crai: str, regions: Optional[str], output: str, cram_format: bool):
+def view(cram: str, crai: str, regions: Optional[str], output: Optional[str] = None, cram_format: bool = True):
     if not output:
         time_stamp = str(datetime.datetime.now()).split('.')[0].replace(':', '').replace(' ', '-')
         extension = 'cram' if cram_format else 'sam'
         # NOTE: schema output (gs:// or file://) is preserved
         output = os.path.abspath(f'{time_stamp}.output.{extension}')
 
-    make_crai_available(crai=crai)
-    write_cram(cram=cram, crai=crai, regions=regions, output=output, cram_format=cram_format)
+    # samtools exhibits odd behavior sometimes if the cram and crai are in separate folders; keep them together
+    staging_dir = f'/tmp/{uuid4()}/'
+    os.makedirs(staging_dir)
+    staged_crai = os.path.join(staging_dir, f'tmp.crai')
+    staged_cram = os.path.join(staging_dir, f'tmp.cram')
+
+
+    make_crai_available(crai=crai, output=staged_crai)
+    write_cram(cram=cram,
+               crai=staged_crai,
+               staged_cram_name=staged_cram,
+               regions=regions,
+               output=output,
+               cram_format=cram_format)
+
+    os.remove(staged_crai)
+    if os.path.exists(staged_cram):
+        os.remove(staged_cram)
+
     return output

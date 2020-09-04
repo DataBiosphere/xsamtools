@@ -30,6 +30,7 @@ cram_cli = dispatch.group("cram")
     # TODO: Allow this to be a google key.
     "--output": dict(type=str,
                      required=False,
+                     default=None,
                      help="A local output file path for the generated cram file.")
 })
 def view(args: argparse.Namespace):

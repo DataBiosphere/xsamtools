@@ -1,2 +1,2 @@
 terra-notebook-utils >= 0.4.1, < 0.5.0
-cli-builder
+cli-builder >= 0.1.4, < 0.2.0

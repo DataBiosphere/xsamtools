@@ -1,3 +1,6 @@
+# Changes for v0.5.2 (2020-10-28)
+Pin CLI builder. (#71)
+
 # Changes for v0.5.1 (2020-09-02)
 Workaround for firecloud installation issue (#70)
 Improve vcf merge tests (#69)

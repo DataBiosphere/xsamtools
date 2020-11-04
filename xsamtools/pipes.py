@@ -6,10 +6,12 @@ import logging
 import multiprocessing
 from uuid import uuid4
 from contextlib import AbstractContextManager
+from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import ProcessPoolExecutor, Future, as_completed
 from typing import Any, Tuple, Dict, IO, BinaryIO, Optional
 
 import gs_chunked_io as gscio
+from gs_chunked_io import async_collections
 from terra_notebook_utils import gs, drs, WORKSPACE_GOOGLE_PROJECT
 
 from xsamtools import gs_utils
@@ -138,19 +140,21 @@ class BlobReaderProcess(FIFOPipeProcess):
 
     def run(self, fh: IO):
         blob = gs_utils._blob_for_url(self.url)
-        with gscio.Reader(blob, threads=1) as blob_reader:
-            while True:
-                data = bytearray(blob_reader.read(blob_reader.chunk_size))
-                if not data:
-                    break
-                while data:
-                    if self._shared_dict.get('stop'):
-                        return
-                    try:
-                        k = fh.write(data)
-                        data = data[k:]
-                    except BrokenPipeError:
-                        time.sleep(1)
+        with ThreadPoolExecutor(max_workers=1) as e:
+            async_queue = async_collections.AsyncQueue(e, 1)
+            with gscio.Reader(blob, async_queue=async_queue) as blob_reader:
+                while True:
+                    data = bytearray(blob_reader.read(blob_reader.chunk_size))
+                    if not data:
+                        break
+                    while data:
+                        if self._shared_dict.get('stop'):
+                            return
+                        try:
+                            k = fh.write(data)
+                            data = data[k:]
+                        except BrokenPipeError:
+                            time.sleep(1)
 
     def close(self):
         if not self._closed:
@@ -170,12 +174,14 @@ class BlobWriterProcess(FIFOPipeProcess):
 
     def run(self, fh: IO):
         bucket = gs.get_client().bucket(self.bucket_name)
-        with gscio.Writer(self.key, bucket, threads=1) as blob_writer:
-            while True:
-                data = fh.read(blob_writer.chunk_size)
-                if not data:
-                    break
-                blob_writer.write(data)
+        with ThreadPoolExecutor(max_workers=1) as e:
+            async_set = async_collections.AsyncSet(e, 1)
+            with gscio.Writer(self.key, bucket, async_set=async_set) as blob_writer:
+                while True:
+                    data = fh.read(blob_writer.chunk_size)
+                    if not data:
+                        break
+                    blob_writer.write(data)
 
 def check_future_result(f: Future):
     try:

@@ -17,18 +17,16 @@ from typing import List, Tuple, Optional
 from collections import namedtuple
 from urllib.request import urlretrieve
 from google.cloud.storage import Blob
-from google.cloud.storage.client import Client
-from terra_notebook_utils import xprofile
+from terra_notebook_utils import xprofile, gs
 
-client = Client(project="platform-dev")
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 
 
 def download_full_gs(gs_path: str, output_filename: str = None):
     # TODO: use gs_chunked_io instead
     bucket_name, key_name = gs_path[len('gs://'):].split('/', 1)
-    output_filename = output_filename if output_filename else key_name
-    bucket = client.get_bucket(bucket_name)
+    output_filename = output_filename if output_filename else os.path.abspath(os.path.basename(key_name))
+    bucket = gs.get_client().get_bucket(bucket_name)
     blob = Blob(key_name, bucket)
     blob.download_to_filename(output_filename)
     print(f'Entire file "{gs_path}" downloaded to: {output_filename}')
@@ -39,7 +37,7 @@ def download_sliced_gs(gs_path: str, ordered_slices: List[Tuple[int, int]], outp
     # TODO: use gs_chunked_io instead
     bucket_name, key_name = gs_path[len('gs://'):].split('/', 1)
     output_filename = output_filename if output_filename else key_name
-    bucket = client.get_bucket(bucket_name)
+    bucket = gs.get_client().get_bucket(bucket_name)
     blob = Blob(key_name, bucket)
     with open(output_filename, "wb") as f:
         for start, end in ordered_slices:

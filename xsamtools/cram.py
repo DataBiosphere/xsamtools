@@ -251,11 +251,10 @@ def write_final_file_with_samtools(cram: str, crai: str, regions: str, cram_form
     cram_format = '-C' if cram_format else ''
     cmd = f'samtools view {cram_format} {cram} -X {crai} {region_args} > {output}'
     log.info(f'Now running: {cmd}')
-    p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = p.communicate()
-    if stdout or stderr:
-        log.debug(f'\nstdout: {stdout}\n')
-        log.debug(f'\nstderr: {stderr}\n')
+    p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+    if p.stdout or p.stderr:
+        log.debug(f'\nstdout: {p.stdout}\n')
+        log.debug(f'\nstderr: {p.stderr}\n')
     else:
         log.debug(f'Output CRAM successfully generated at: {output}')
 

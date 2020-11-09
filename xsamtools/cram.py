@@ -10,14 +10,12 @@ import codecs
 import subprocess
 import datetime
 import copy
-import time
 import numpy as np
 
 from uuid import uuid4
 from typing import List, Tuple, Optional
 from collections import namedtuple
 from urllib.request import urlretrieve
-from google.resumable_media.common import DataCorruption
 from google.cloud.storage import Blob
 from google.cloud.storage.client import Client
 from terra_notebook_utils import xprofile
@@ -45,7 +43,7 @@ def download_sliced_gs(gs_path: str, ordered_slices: List[Tuple[int, int]], outp
     blob = Blob(key_name, bucket)
     with open(output_filename, "wb") as f:
         for start, end in ordered_slices:
-            # TODO: Google erroneously raises DataCorruption when checksumming 100% of the time
+            # TODO: google raises google.resumable_media.common.DataCorruption when checksumming (erroneously?)
             new_string = blob.download_as_bytes(start=start, end=end, raw_download=False, checksum=None)
             f.seek(start)
             f.write(new_string)
@@ -398,7 +396,6 @@ def view(cram: str, crai: str, regions: Optional[str], output: Optional[str] = N
     try:
         if cram.startswith('gs://') or crai.startswith('gs://'):
             cram, crai = staged_files = stage_gs_files_locally(cram=cram, crai=crai, regions=regions)
-            # staged_files.append(f'{output_filename}.tmp-header.cram')
         write_final_file_with_samtools(cram=cram, crai=crai, regions=regions, cram_format=cram_format, output=output)
     finally:
         # clean up

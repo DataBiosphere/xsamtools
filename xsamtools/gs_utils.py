@@ -1,13 +1,13 @@
 import io
 from uuid import uuid4
-from typing import Optional
+from typing import Sequence, Optional
 
 import google.cloud.exceptions
 import gs_chunked_io as gscio
 from terra_notebook_utils import gs, drs, WORKSPACE_GOOGLE_PROJECT
 
 
-def _blob_for_url(url: str, verify_read_access: bool=False) -> gscio.reader.Blob:
+def _blob_for_url(url: str) -> Optional[gscio.reader.Blob]:
     if url.startswith("gs://"):
         bucket_name, key = url[5:].split("/", 1)
         client = gs.get_client()
@@ -19,9 +19,18 @@ def _blob_for_url(url: str, verify_read_access: bool=False) -> gscio.reader.Blob
         key = info.key
     else:
         raise ValueError(f"expected drs:// or gs:// url, not {url}")
-    if verify_read_access:
-        bucket.blob(key).download_to_file(io.BytesIO(), start=0, end=1)
     return bucket.get_blob(key)
+
+def _read_access(url: str) -> bool:
+    assert url.startswith("gs://") or url.startswith("drs://")
+    blob = _blob_for_url(url)
+    if blob is None:
+        return False
+    try:
+        blob.download_to_file(io.BytesIO(), start=0, end=1)
+        return True
+    except google.cloud.exceptions.Forbidden:
+        return False
 
 def _write_access(bucket_name: str) -> bool:
     blob = gs.get_client().bucket(bucket_name).blob(f"verify-access-{uuid4()}")
@@ -31,3 +40,12 @@ def _write_access(bucket_name: str) -> bool:
         return False
     blob.delete()
     return True
+
+def _assert_access(read_paths: Sequence[str], write_paths: Sequence[str]):
+    for p in read_paths:
+        if p.startswith("gs://") or p.startswith("drs://"):
+            assert _read_access(p)
+    for p in write_paths:
+        if p.startswith("gs://"):
+            bucket_name, _ = p[5:].split("/", 1)
+            assert _write_access(bucket_name)

@@ -9,7 +9,7 @@ from typing import Union, Sequence
 
 from terra_notebook_utils import xprofile, drs
 
-from xsamtools import pipes, samtools, gs_utils
+from xsamtools import pipes, vcf, samtools, gs_utils
 
 
 cores_available = cpu_count()

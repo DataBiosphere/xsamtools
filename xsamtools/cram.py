@@ -9,59 +9,48 @@ import gzip
 import codecs
 import subprocess
 import datetime
+import copy
+import time
 import numpy as np
 
 from uuid import uuid4
 from typing import List, Tuple, Optional
 from collections import namedtuple
-from bitarray import bitarray
 from urllib.request import urlretrieve
+from google.resumable_media.common import DataCorruption
 from google.cloud.storage import Blob
 from google.cloud.storage.client import Client
-from terra_notebook_utils import xprofile, drs
+from terra_notebook_utils import xprofile
 
 client = Client(project="platform-dev")
+CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 
 
-def download_gs(gs_path: str, output_filename: str = None):
+def download_full_gs(gs_path: str, output_filename: str = None):
     # TODO: use gs_chunked_io instead
     bucket_name, key_name = gs_path[len('gs://'):].split('/', 1)
     output_filename = output_filename if output_filename else key_name
     bucket = client.get_bucket(bucket_name)
     blob = Blob(key_name, bucket)
     blob.download_to_filename(output_filename)
-    print(f'{gs_path} downloaded to: {output_filename}')
+    print(f'Entire file "{gs_path}" downloaded to: {output_filename}')
     return output_filename
 
 
 def download_sliced_gs(gs_path: str, ordered_slices: List[Tuple[int, int]], output_filename: str = None):
     # TODO: use gs_chunked_io instead
-    print(gs_path[len('gs://'):].split('/', 1))
     bucket_name, key_name = gs_path[len('gs://'):].split('/', 1)
     output_filename = output_filename if output_filename else key_name
     bucket = client.get_bucket(bucket_name)
     blob = Blob(key_name, bucket)
     with open(output_filename, "wb") as f:
         for start, end in ordered_slices:
-            new_string = blob.download_as_string(start=start, end=end)
+            # TODO: Google erroneously raises DataCorruption when checksumming 100% of the time
+            new_string = blob.download_as_bytes(start=start, end=end, raw_download=False, checksum=None)
             f.seek(start)
             f.write(new_string)
-    print(f'Sliced {gs_path} downloaded to: {output_filename}')
+    print(f'Sliced file "{gs_path}" downloaded to: {output_filename}')
     return output_filename
-
-
-def bitarray_from_byte(data):
-    ba = bitarray(endian='big')
-    ba.frombytes(data)
-    return ba.to01()
-
-
-def convert_to_int(input_bits='01010101'):
-    # TODO: This needs to be a signed int
-    total = 0
-    for i, b in enumerate(input_bits[::-1]):
-        total += int(b) * (2 ** i)
-    return total
 
 
 def decode_itf8_array(handle, size=None):
@@ -72,9 +61,13 @@ def decode_itf8_array(handle, size=None):
     return itf8_array
 
 
-def decode_itf8(handle):
+def next_int(fh):
+    return int.from_bytes(fh.read(1), byteorder='little', signed=False)
+
+
+def encode_itf8(value):
     """
-     * Methods to read and write int values as per ITF8 specification in CRAM.
+     * Encodes int values with CRAM's ITF8 protocol.
      *
      * ITF8 encodes ints as 1 to 5 bytes depending on the highest set bit.
      *
@@ -100,62 +93,91 @@ def decode_itf8(handle):
      *      write out [bits 5-12]
      *      write out [bits 1-8]
 
-     Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12
-
-    :param handle:
-    :return:
+    Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12
     """
-    first_byte = handle.read(1)
-    initial_data_block = bitarray_from_byte(first_byte)
+    if value < 2 ** 7:
+        integers = [value]
+    elif value < 2 ** 14:
+        integers = [((value >> 8) | 0x80), (value & 0xFF)]
+    elif value < 2 ** 21:
+        integers = [((value >> 16) | 0xC0), ((value >> 8) & 0xFF), (value & 0xFF)]
+    elif value < 2 ** 28:
+        integers = [((value >> 24) | 0xE0), ((value >> 16) & 0xFF), ((value >> 8) & 0xFF), (value & 0xFF)]
+    elif value < 2 ** 32:
+        integers = [((value >> 28) | 0xF0), ((value >> 20) & 0xFF), ((value >> 12) & 0xFF), ((value >> 4) & 0xFF), (value & 0xFF)]
+    else:
+        raise ValueError('Number is too large for an unsigned 32-bit integer.')
+    return bytes(integers)
 
-    if initial_data_block.startswith('0'):
-        final_data_block = initial_data_block
 
-    elif initial_data_block.startswith('10'):
-        bits_9_to_14 = initial_data_block.lstrip('10')
-        bits_1_to_8 = bitarray_from_byte(handle.read(1))
-        final_data_block = bits_1_to_8 + bits_9_to_14
+def decode_itf8(fh):
+    """
+     * Decode int values with CRAM's ITF8 protocol.
+     *
+     * ITF8 encodes ints as 1 to 5 bytes depending on the highest set bit.
+     *
+     * (using 1-based counting)
+     * If highest bit < 8:
+     *      write out [bits 1-8]
+     * Highest bit = 8-14:
+     *      write a byte 1,0,[bits 9-14]
+     *      write out [bits 1-8]
+     * Highest bit = 15-21:
+     *      write a byte 1,1,0,[bits 17-21]
+     *      write out [bits 9-16]
+     *      write out [bits 1-8]
+     * Highest bit = 22-28:
+     *      write a byte 1,1,1,0,[bits 25-28]
+     *      write out [bits 17-24]
+     *      write out [bits 9-16]
+     *      write out [bits 1-8]
+     * Highest bit > 28:
+     *      write a byte 1,1,1,1,[bits 29-32]
+     *      write out [bits 21-28]                      **** note the change in pattern here
+     *      write out [bits 13-20]
+     *      write out [bits 5-12]
+     *      write out [bits 1-8]
 
-    elif initial_data_block.startswith('110'):
-        bits_17_to_21 = initial_data_block.lstrip('110')
-        bits_9_to_16 = bitarray_from_byte(handle.read(1))
-        bits_1_to_8 = bitarray_from_byte(handle.read(1))
-        final_data_block = bits_1_to_8 + bits_9_to_16 + bits_17_to_21
+    Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12
+    """
+    int1 = next_int(fh)
 
-    elif initial_data_block.startswith('1110'):
-        bits_25_to_28 = initial_data_block.lstrip('1110')
-        bits_17_to_24 = bitarray_from_byte(handle.read(1))
-        bits_9_to_16 = bitarray_from_byte(handle.read(1))
-        bits_1_to_8 = bitarray_from_byte(handle.read(1))
-        final_data_block = bits_1_to_8 + bits_9_to_16 + bits_17_to_24 + bits_25_to_28
+    if (int1 & 128) == 0:
+        return int1
 
-    elif initial_data_block.startswith('1111'):
-        bits_29_to_32 = initial_data_block.lstrip('1111')
-        bits_21_to_28 = bitarray_from_byte(handle.read(1))
-        bits_13_to_20 = bitarray_from_byte(handle.read(1))
-        bits_5_to_12 = bitarray_from_byte(handle.read(1))
-        bits_1_to_8 = bitarray_from_byte(handle.read(1))
+    elif (int1 & 64) == 0:
+        int2 = next_int(fh)
+        return ((int1 & 127) << 8) | int2
 
-        # cut off the overlap
-        bits_1_to_4 = bits_1_to_8[:4]
-        final_data_block = bits_1_to_4 + bits_5_to_12 + bits_13_to_20 + bits_21_to_28 + bits_29_to_32
+    elif (int1 & 32) == 0:
+        int2 = next_int(fh)
+        int3 = next_int(fh)
+        return ((int1 & 63) << 16) | int2 << 8 | int3
+
+    elif (int1 & 16) == 0:
+        int2 = next_int(fh)
+        int3 = next_int(fh)
+        int4 = next_int(fh)
+        return ((int1 & 31) << 24) | int2 << 16 | int3 << 8 | int4
 
     else:
-        print('This should never happen')
-        exit()
+        int2 = next_int(fh)
+        int3 = next_int(fh)
+        int4 = next_int(fh)
+        int5 = next_int(fh)
+        return ((int1 & 15) << 28) | int2 << 20 | int3 << 12 | int4 << 4 | (15 & int5)
 
-    return convert_to_int(final_data_block)
 
-
-def file_definition(f):
+def file_definition(f, show=False):
     CRAM = f.read(4).decode('utf-8')
     major_version = int.from_bytes(f.read(1), byteorder='big')
     minor_version = int.from_bytes(f.read(1), byteorder='big')
     file_id = f.read(20).decode('utf-8')
-    return f'{CRAM} {major_version}.{minor_version} {file_id}'
+    if show:
+        print(f'{CRAM} {major_version}.{minor_version} {file_id}')
 
 
-def container_header(fh, show=True):
+def container_header(fh, show=False):
     length = np.frombuffer(fh.read(np.dtype(np.int32).itemsize), np.dtype(np.int32))[0]
     reference_sequence_id = decode_itf8(fh)
     starting_position = decode_itf8(fh)
@@ -165,6 +187,7 @@ def container_header(fh, show=True):
     bases = decode_itf8(fh)
     number_of_blocks = decode_itf8(fh)
     landmarks = decode_itf8_array(fh)
+    crc_hash = fh.read(4)
     if show:
         print("length", length)
         print("reference_sequence_id", reference_sequence_id)
@@ -175,83 +198,63 @@ def container_header(fh, show=True):
         print("bases", bases)
         print("number_of_blocks", number_of_blocks)
         print("landmark", landmarks)
+        print("crc_hash", crc_hash)
 
 
-def read_raw_seq_names_from_sam_header(handle):
+def read_seq_names_from_sam_header(fh, end_of_header, gzipped=False):
     """Offset must be reset after running this."""
-    sequence_names = {}
+    # TODO: Terminate reading without explicit "end_of_header"
+    sequence = {}
     i = 0
+    handle = fh if not gzipped else gzip.GzipFile(fileobj=fh)
     for line in handle:
-        if b'@SQ\t' in line:
-            split_SQ = line.split(b'@SQ\t', 1)
-            assert len(split_SQ) >= 2
-            split_SQ.pop(0)
-            for SQ in split_SQ:
-                for section in SQ.split(b'\t'):
-                    if section.startswith(b'SN:'):
-                        sequence_names[section[len(b'SN:'):].decode('utf-8')] = i
-                        i += 1
-        if sequence_names and b'@SQ\t' not in line:
-            break
-
-    return sequence_names
+        if b'@SQ' in line:
+            for tag in line.split(b'\t'):
+                if tag == b'@SQ':
+                    i += 1
+                    sequence[i] = []
+                elif tag[:2] in [b'SN', b'AN']:
+                    tag_value = tag[3:]
+                    assert tag_value not in sequence
+                    sequence[tag_value] = i
+        if fh.tell() >= end_of_header:
+            return sequence
 
 
-def read_gs_cram_file_header(output_cram):
-    with open(output_cram, "rb") as fh:
-        file_definition(fh)
-        container_header(fh, show=False)
-        seq_map = read_raw_seq_names_from_sam_header(fh)
+def find_next_gzip_marker(fh):
+    c1 = fh.read(1)
+    while True:
+        c2 = fh.read(1)
+        if c1 == b'\x1f' and c2 == b'\x8b':
+            fh.seek(-2, 1)
+            return fh.tell()
+        else:
+            c1 = copy.copy(c2)
+
+
+def sam_header(fh, end_of_header):
+    # TODO: Make this cleaner and return unicode!
+    where_was_i = fh.tell()
+
+    # attempt to parse raw header
+    seq_map = read_seq_names_from_sam_header(fh, end_of_header)
+    if seq_map:
+        return seq_map
+
+    # header is compressed, reset and try again
+    fh.seek(where_was_i)
+    find_next_gzip_marker(fh)
+    seq_map = read_seq_names_from_sam_header(fh, end_of_header, gzipped=True)
+    assert seq_map, f'Something went wrong reading the cram header (no seq name mappings determined).'
     return seq_map
 
 
-def container_slices(crai_indices, identifiers):
-    slices = []
-    slice_start = 0
-    header_only_section = False
-    for i, crai_line in enumerate(crai_indices):
-        slice_end = crai_line.offset
-        if header_only_section:
-            slices.append((slice_start, slice_start + 200))
-        else:
-            slices.append((slice_start, slice_end))
-        slice_start = crai_line.offset
-        if crai_line.chr in identifiers:
-            header_only_section = False
-        else:
-            header_only_section = True
-
-    if header_only_section:
-        slices.append((slice_start, slice_start + 200))
-    else:
-        slices.append((slice_start, None))
-
-    return slices
-
-
-def write_intermediate_cram_output(crai_indices, cram_file, cram_output_name, regions):
-    first_crai_index = crai_indices[0]
-    # TODO: Read as a streamed string
-    if cram_file.startswith('gs://'):
-        local_cram = download_sliced_gs(gs_path=cram_file, ordered_slices=[(0, first_crai_index.offset)])
-        seq_map = read_gs_cram_file_header(local_cram)
-    else:
-        seq_map = read_gs_cram_file_header(cram_file)
-
-    identifiers = []
-    for region in regions.split(','):
-        if ':' in region:
-            seq_name, num = region.split(':')
-            region = seq_name
-
-        # If region is not present in seq_map (produced from the crai index),
-        # then the user specified an identifier not present in the data.
-        # Ignore here by not adding it and let samtools catch the error downstream.
-        if region in seq_map:
-            identifiers.append(seq_map[region])
-
-    slices = container_slices(crai_indices, identifiers)
-    download_sliced_gs(gs_path=cram_file, ordered_slices=slices, output_filename=cram_output_name)
+def read_gs_cram_file_header(output_cram, end_of_header):
+    with open(output_cram, "rb") as fh:
+        file_definition(fh, show=True)
+        container_header(fh, show=True)
+        seq_map = sam_header(fh, end_of_header)
+    return seq_map
 
 
 def write_final_file_with_samtools(cram: str, crai: str, regions: str, cram_format: bool, output: str):
@@ -268,9 +271,76 @@ def write_final_file_with_samtools(cram: str, crai: str, regions: str, cram_form
         print(f'Output CRAM successfully generated at: {output}')
 
 
-def make_crai_available(crai: str, output: str):
+def get_crai_indices(crai):
+    crai_indices = []
+    with open(crai, "rb") as fh:
+        with gzip.GzipFile(fileobj=fh) as gzip_reader:
+            with codecs.getreader("ascii")(gzip_reader) as reader:
+                for line in reader:
+                    crai_indices.append(CramLocation(*[int(d) for d in line.split("\t")]))
+    return crai_indices
+
+
+def get_block_slice_map(crai_indices, seq_names):
+    slices = []
+    slice_start = 0
+    header_only_section = False
+    for i, crai_line in enumerate(crai_indices):
+        slice_end = crai_line.offset
+        if header_only_section:
+            slices.append((slice_start, slice_start + 200))
+        else:
+            slices.append((slice_start, slice_end))
+        slice_start = crai_line.offset
+        if crai_line.chr in seq_names:
+            header_only_section = False
+        else:
+            header_only_section = True
+
+    if header_only_section:
+        slices.append((slice_start, slice_start + 200))
+    else:
+        slices.append((slice_start, None))
+
+    return slices
+
+
+def download_sliced_cram(crai: str, cram: str, output_filename: str, regions: str):
+    """Assumes that a crai is local and that the cram is a google bucket path."""
+    assert os.path.exists(crai), crai
+    assert cram.startswith('gs://'), cram
+    crai_indices = get_crai_indices(crai)
+    end_of_first_block = crai_indices[1].offset
+    # TODO: Read as a streamed string
+
+    # download the cram header contents
+    tmp_header_file = f'{output_filename}.tmp-header.cram'
+    local_cram = download_sliced_gs(
+        gs_path=cram,
+        ordered_slices=[(0, end_of_first_block)],
+        output_filename=tmp_header_file)
+    # decipher the cram header contents in order to map block numbers to common names like "chr1"
+    seq_map = read_gs_cram_file_header(local_cram, end_of_first_block)
+
+    seq_names = []
+    for region in regions.split(','):
+        seq_name = region.split(':')[0]
+        if seq_name.encode('utf-8') in seq_map:
+            seq_names.append(seq_map[seq_name.encode('utf-8')])
+
+    if seq_names:
+        slices = get_block_slice_map(crai_indices, seq_names)
+        download_sliced_gs(gs_path=cram, ordered_slices=slices, output_filename=output_filename)
+    else:
+        # this occurs when a user specifies chromosomes that do not exist
+        # samtools does not error on this and produces an empty output
+        # TODO: handle this better!
+        download_full_gs(gs_path=cram, output_filename=output_filename)
+
+
+def stage_crai(crai: str, output: str):
     if crai.startswith('gs://'):
-        download_gs(crai, output_filename=output)
+        download_full_gs(crai, output_filename=output)
     elif crai.startswith('file://'):
         os.link(crai[len('file://'):], output)
     elif crai.startswith('http://') or crai.startswith('https://'):
@@ -281,60 +351,59 @@ def make_crai_available(crai: str, output: str):
         raise NotImplementedError(f'Unsupported format: {crai}')
 
 
-def get_crai_indices(crai):
-    CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
-
-    crai_indices = []
-    with open(crai, "rb") as fh:
-        with gzip.GzipFile(fileobj=fh) as gzip_reader:
-            with codecs.getreader("ascii")(gzip_reader) as reader:
-                for line in reader:
-                    crai_indices.append(CramLocation(*[int(d) for d in line.split("\t")]))
-    return crai_indices
-
-
-def write_cram(cram: str, staged_cram_name: str, crai: str, regions: Optional[str], output: str, cram_format: bool = True):
+def stage_cram(cram: str, crai: str, regions: str, output: str):
     if cram.startswith('gs://'):
-        # attempt to only download the relevant portions/slices of the file
         if regions:
-            crai_indices = get_crai_indices(crai)
-            write_intermediate_cram_output(crai_indices=crai_indices,
-                                           cram_file=cram,
-                                           cram_output_name=staged_cram_name,
-                                           regions=regions)
-        # if there is no subset of regions specified, we need to download the entire cram file
+            # attempt to only download the relevant portions/slices of the file
+            download_sliced_cram(cram=cram, crai=crai, regions=regions, output_filename=output)
         else:
-            download_gs(cram, output_filename=staged_cram_name)
-        cram = staged_cram_name
+            # if there is no subset of regions specified, we need to download the entire cram file
+            download_full_gs(cram, output_filename=output)
+    elif cram.startswith('file://'):
+        os.link(cram[len('file://'):], output)
+    elif cram.startswith('http://') or cram.startswith('https://'):
+        # TODO: not sure if we can slice these or if there is any desire to?
+        urlretrieve(cram, output)
+    elif '://' not in cram:
+        os.link(cram, output)
+    else:
+        raise NotImplementedError(f'Unsupported format: {cram}')
 
-    write_final_file_with_samtools(cram=cram, crai=crai, regions=regions, cram_format=cram_format, output=output)
 
-
-@xprofile.profile("xsamtools cram view")
-def view(cram: str, crai: str, regions: Optional[str], output: Optional[str] = None, cram_format: bool = True):
-    if not output:
-        time_stamp = str(datetime.datetime.now()).split('.')[0].replace(':', '').replace(' ', '-')
-        extension = 'cram' if cram_format else 'sam'
-        # NOTE: schema output (gs:// or file://) is preserved
-        output = os.path.abspath(f'{time_stamp}.output.{extension}')
-
+def stage_gs_files_locally(cram, crai, regions: Optional[str]):
     # samtools exhibits odd behavior sometimes if the cram and crai are in separate folders; keep them together
     staging_dir = f'/tmp/{uuid4()}/'
     os.makedirs(staging_dir)
     staged_crai = os.path.join(staging_dir, f'tmp.crai')
     staged_cram = os.path.join(staging_dir, f'tmp.cram')
 
+    stage_crai(crai=crai, output=staged_crai)
+    stage_cram(cram=cram, crai=staged_crai, regions=regions, output=staged_cram)
 
-    make_crai_available(crai=crai, output=staged_crai)
-    write_cram(cram=cram,
-               crai=staged_crai,
-               staged_cram_name=staged_cram,
-               regions=regions,
-               output=output,
-               cram_format=cram_format)
+    return staged_cram, staged_crai
 
-    os.remove(staged_crai)
-    if os.path.exists(staged_cram):
-        os.remove(staged_cram)
+
+def timestamped_filename(cram_format):
+    time_stamp = str(datetime.datetime.now()).split('.')[0].replace(':', '').replace(' ', '-')
+    extension = 'cram' if cram_format else 'sam'
+    # NOTE: schema output (gs:// or file://) is preserved
+    return os.path.abspath(f'{time_stamp}.output.{extension}')
+
+
+@xprofile.profile("xsamtools cram view")
+def view(cram: str, crai: str, regions: Optional[str], output: Optional[str] = None, cram_format: bool = True):
+    output = output or timestamped_filename(cram_format)
+    staged_files = []
+
+    try:
+        if cram.startswith('gs://') or crai.startswith('gs://'):
+            cram, crai = staged_files = stage_gs_files_locally(cram=cram, crai=crai, regions=regions)
+            # staged_files.append(f'{output_filename}.tmp-header.cram')
+        write_final_file_with_samtools(cram=cram, crai=crai, regions=regions, cram_format=cram_format, output=output)
+    finally:
+        # clean up
+        for staged_file in staged_files:
+            if os.path.exists(staged_file):
+                os.remove(staged_file)
 
     return output

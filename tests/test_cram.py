@@ -4,6 +4,7 @@ import sys
 import warnings
 import unittest
 import subprocess
+import logging
 
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
@@ -11,6 +12,7 @@ sys.path.insert(0, pkg_root)  # noqa
 from xsamtools import cram  # noqa
 
 WORKSPACE_BUCKET = 'fc-9169fcd1-92ce-4d60-9d2d-d19fd326ff10'
+log = logging.getLogger(__name__)
 
 
 class TestCram(unittest.TestCase):
@@ -23,11 +25,11 @@ class TestCram(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.cram_gs_path = 'gs://lons-test/ce#5b.cram'
-        cls.cram_local_path = cram.download_gs(gs_path=cls.cram_gs_path,
-                                               output_filename=os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram'))
+        cls.cram_local_path = cram.download_full_gs(gs_path=cls.cram_gs_path,
+                                                    output_filename=os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram'))
         cls.crai_gs_path = 'gs://lons-test/ce#5b.cram.crai'
-        cls.crai_local_path = cram.download_gs(gs_path=cls.crai_gs_path,
-                                               output_filename=os.path.join(pkg_root, 'tests/fixtures/ce#5b.crai'))
+        cls.crai_local_path = cram.download_full_gs(gs_path=cls.crai_gs_path,
+                                                    output_filename=os.path.join(pkg_root, 'tests/fixtures/ce#5b.crai'))
         cls.clean_up = [cls.cram_local_path, cls.crai_local_path]
         # basically the entire contents of ce#5b.cram
         cls.regions = {
@@ -133,6 +135,7 @@ class TestCram(unittest.TestCase):
 
         # view the OUTPUT cram as human readable
         cmd = f'samtools view {cram_output} -X {self.crai_local_path}'
+        log.info(f'Now running: {cmd}')
         p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         sam_stdout, samtools_error = p.communicate()
         return sam_stdout, samtools_error

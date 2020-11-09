@@ -10,6 +10,7 @@ import codecs
 import subprocess
 import datetime
 import copy
+import logging
 import numpy as np
 
 from uuid import uuid4
@@ -20,6 +21,7 @@ from google.cloud.storage import Blob
 from terra_notebook_utils import xprofile, gs
 
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
+log = logging.getLogger(__name__)
 
 
 def download_full_gs(gs_path: str, output_filename: str = None):
@@ -29,7 +31,7 @@ def download_full_gs(gs_path: str, output_filename: str = None):
     bucket = gs.get_client().get_bucket(bucket_name)
     blob = Blob(key_name, bucket)
     blob.download_to_filename(output_filename)
-    print(f'Entire file "{gs_path}" downloaded to: {output_filename}')
+    log.debug(f'Entire file "{gs_path}" downloaded to: {output_filename}')
     return output_filename
 
 
@@ -45,7 +47,7 @@ def download_sliced_gs(gs_path: str, ordered_slices: List[Tuple[int, int]], outp
             new_string = blob.download_as_bytes(start=start, end=end, raw_download=False, checksum=None)
             f.seek(start)
             f.write(new_string)
-    print(f'Sliced file "{gs_path}" downloaded to: {output_filename}')
+    log.debug(f'Sliced file "{gs_path}" downloaded to: {output_filename}')
     return output_filename
 
 
@@ -164,37 +166,28 @@ def decode_itf8(fh):
         return ((int1 & 15) << 28) | int2 << 20 | int3 << 12 | int4 << 4 | (15 & int5)
 
 
-def file_definition(f, show=False):
-    CRAM = f.read(4).decode('utf-8')
-    major_version = int.from_bytes(f.read(1), byteorder='big')
-    minor_version = int.from_bytes(f.read(1), byteorder='big')
-    file_id = f.read(20).decode('utf-8')
-    if show:
-        print(f'{CRAM} {major_version}.{minor_version} {file_id}')
+def file_definition(fh):
+    return {
+        'cram': fh.read(4).decode('utf-8'),
+        'major_version': int.from_bytes(fh.read(1), byteorder='big'),
+        'minor_version': int.from_bytes(fh.read(1), byteorder='big'),
+        'file_id': fh.read(20).decode('utf-8')
+    }
 
 
-def container_header(fh, show=False):
-    length = np.frombuffer(fh.read(np.dtype(np.int32).itemsize), np.dtype(np.int32))[0]
-    reference_sequence_id = decode_itf8(fh)
-    starting_position = decode_itf8(fh)
-    alignment_span = decode_itf8(fh)
-    number_of_records = decode_itf8(fh)
-    record_counter = decode_itf8(fh)
-    bases = decode_itf8(fh)
-    number_of_blocks = decode_itf8(fh)
-    landmarks = decode_itf8_array(fh)
-    crc_hash = fh.read(4)
-    if show:
-        print("length", length)
-        print("reference_sequence_id", reference_sequence_id)
-        print("starting_position", starting_position)
-        print("alignment_span", alignment_span)
-        print("number_of_records", number_of_records)
-        print("record_counter", record_counter)
-        print("bases", bases)
-        print("number_of_blocks", number_of_blocks)
-        print("landmark", landmarks)
-        print("crc_hash", crc_hash)
+def container_header(fh):
+    return {
+        "length": np.frombuffer(fh.read(np.dtype(np.int32).itemsize), np.dtype(np.int32))[0],
+        "reference_sequence_id": decode_itf8(fh),
+        "starting_position": decode_itf8(fh),
+        "alignment_span": decode_itf8(fh),
+        "number_of_records": decode_itf8(fh),
+        "record_counter": decode_itf8(fh),
+        "bases": decode_itf8(fh),
+        "number_of_blocks": decode_itf8(fh),
+        "landmark": decode_itf8_array(fh),
+        "crc_hash": fh.read(4)
+    }
 
 
 def read_seq_names_from_sam_header(fh, end_of_header, gzipped=False):
@@ -247,8 +240,8 @@ def sam_header(fh, end_of_header):
 
 def read_gs_cram_file_header(output_cram, end_of_header):
     with open(output_cram, "rb") as fh:
-        file_definition(fh, show=True)
-        container_header(fh, show=True)
+        file_definition(fh)
+        container_header(fh)
         seq_map = sam_header(fh, end_of_header)
     return seq_map
 
@@ -257,14 +250,14 @@ def write_final_file_with_samtools(cram: str, crai: str, regions: str, cram_form
     region_args = ' '.join(regions.split(',')) if regions else ''
     cram_format = '-C' if cram_format else ''
     cmd = f'samtools view {cram_format} {cram} -X {crai} {region_args} > {output}'
-    print(f'Now running: {cmd}')
+    log.info(f'Now running: {cmd}')
     p = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = p.communicate()
     if stdout or stderr:
-        print(f'\nstdout: {stdout}\n')
-        print(f'\nstderr: {stderr}\n')
+        log.debug(f'\nstdout: {stdout}\n')
+        log.debug(f'\nstderr: {stderr}\n')
     else:
-        print(f'Output CRAM successfully generated at: {output}')
+        log.debug(f'Output CRAM successfully generated at: {output}')
 
 
 def get_crai_indices(crai):

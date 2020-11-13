@@ -196,18 +196,21 @@ def read_seq_names_from_sam_header(fh, end_of_header, gzipped=False):
     sequence = {}
     i = 0
     handle = fh if not gzipped else gzip.GzipFile(fileobj=fh)
-    for line in handle:
-        if b'@SQ' in line:
-            for tag in line.split(b'\t'):
-                if tag == b'@SQ':
-                    i += 1
-                    sequence[i] = []
-                elif tag[:2] in [b'SN', b'AN']:
-                    tag_value = tag[3:]
-                    assert tag_value not in sequence
-                    sequence[tag_value] = i
-        if fh.tell() >= end_of_header:
-            return sequence
+    try:
+        for line in handle:
+            if b'@SQ' in line:
+                for tag in line.split(b'\t'):
+                    if tag == b'@SQ':
+                        i += 1
+                        sequence[i] = []
+                    elif tag[:2] in [b'SN', b'AN']:
+                        tag_value = tag[3:]
+                        assert tag_value not in sequence
+                        sequence[tag_value] = i
+            if fh.tell() >= end_of_header:
+                return sequence
+    except gzip.BadGzipFile:
+        return sequence
 
 
 def find_next_gzip_marker(fh):
@@ -272,23 +275,20 @@ def get_crai_indices(crai):
 def get_block_slice_map(crai_indices, seq_names):
     slices = []
     slice_start = 0
-    header_only_section = False
+    truncated_section = False
     for i, crai_line in enumerate(crai_indices):
-        slice_end = crai_line.offset
-        if header_only_section:
-            slices.append((slice_start, slice_start + 200))
-        else:
+        slice_end = slice_start + 200 if truncated_section else crai_line.offset
+        if not slices or (slices[-1][1] != slice_start):
             slices.append((slice_start, slice_end))
-        slice_start = crai_line.offset
-        if crai_line.chr in seq_names:
-            header_only_section = False
         else:
-            header_only_section = True
+            slices[-1] = (slices[-1][0], slice_end)
+        slice_start = crai_line.offset
+        truncated_section = False if crai_line.chr in seq_names else True
 
-    if header_only_section:
-        slices.append((slice_start, slice_start + 200))
-    else:
+    if not slices or (slices[-1][1] != slice_start):
         slices.append((slice_start, None))
+    else:
+        slices[-1] = (slices[-1][0], None)
 
     return slices
 
@@ -339,9 +339,9 @@ def stage_crai(crai: str, output: str):
         raise NotImplementedError(f'Unsupported format: {crai}')
 
 
-def stage_cram(cram: str, crai: str, regions: str, output: str):
+def stage_cram(cram: str, crai: str, regions: str, output: str, slice_cloud_files: bool):
     if cram.startswith('gs://'):
-        if regions:
+        if regions and slice_cloud_files:
             # attempt to only download the relevant portions/slices of the file
             download_sliced_cram(cram=cram, crai=crai, regions=regions, output_filename=output)
         else:
@@ -358,7 +358,7 @@ def stage_cram(cram: str, crai: str, regions: str, output: str):
         raise NotImplementedError(f'Unsupported format: {cram}')
 
 
-def stage_gs_files_locally(cram, crai, regions: Optional[str]):
+def stage_gs_files_locally(cram: str, crai: str, regions: Optional[str], slice_cloud_files: bool):
     # samtools exhibits odd behavior sometimes if the cram and crai are in separate folders; keep them together
     staging_dir = f'/tmp/{uuid4()}/'
     os.makedirs(staging_dir)
@@ -366,7 +366,7 @@ def stage_gs_files_locally(cram, crai, regions: Optional[str]):
     staged_cram = os.path.join(staging_dir, f'tmp.cram')
 
     stage_crai(crai=crai, output=staged_crai)
-    stage_cram(cram=cram, crai=staged_crai, regions=regions, output=staged_cram)
+    stage_cram(cram=cram, crai=staged_crai, regions=regions, output=staged_cram, slice_cloud_files=slice_cloud_files)
 
     return staged_cram, staged_crai
 
@@ -379,13 +379,15 @@ def timestamped_filename(cram_format):
 
 
 @xprofile.profile("xsamtools cram view")
-def view(cram: str, crai: str, regions: Optional[str], output: Optional[str] = None, cram_format: bool = True):
+def view(cram: str, crai: str, regions: Optional[str], output: Optional[str] = None, cram_format: bool = True,
+         slice_cloud_files: bool = True):
     output = output or timestamped_filename(cram_format)
     staged_files = []
 
     try:
         if cram.startswith('gs://') or crai.startswith('gs://'):
-            cram, crai = staged_files = stage_gs_files_locally(cram=cram, crai=crai, regions=regions)
+            cram, crai = staged_files = stage_gs_files_locally(cram=cram, crai=crai, regions=regions,
+                                                               slice_cloud_files=slice_cloud_files)
         write_final_file_with_samtools(cram=cram, crai=crai, regions=regions, cram_format=cram_format, output=output)
     finally:
         # clean up

@@ -18,6 +18,14 @@ cram_cli = dispatch.group("cram")
                    required=False,
                    help="Input crai file. This can be a Google Storage object if prefixed with 'gs://'.  "
                         "If not specified, one will be generated for you (this may take a long time)."),
+    "--slice_cloud_files": dict(type=bool,
+                                required=False,
+                                default=True,
+                                help="Defaults to True.  When acting upon cloud cram files, this will attempt to "
+                                     "slice out and download only the sections of the cram corresponding to the "
+                                     "--regions argument in order to save time and I/O.  When set to False, this "
+                                     "will download the entire cram (and crai if specified) and then run samtools "
+                                     "on it."),
     # TODO: add an argument to intake a BED file, as that's the more rational use-case.
     "--regions": dict(type=str,
                       required=False,
@@ -39,4 +47,5 @@ def view(args: argparse.Namespace):
     """
     if '://' in args.output and not args.output.startswith('file://'):
         raise NotImplementedError(f'Schema not yet supported: {args.output}')
-    cram.view(cram=args.cram, crai=args.crai, regions=args.regions, output=args.output, cram_format=args.C)
+    cram.view(cram=args.cram, crai=args.crai, regions=args.regions, output=args.output, cram_format=args.C,
+              slice_cloud_files=args.slice_cloud_files)

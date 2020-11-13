@@ -23,13 +23,19 @@ uris = []
 for cram_gs_path, crai_gs_path in cram_crai_pairs:
     local_cram_path = output(cram_gs_path)
     if not os.path.exists(local_cram_path):
+        print(f'Now downloading for local testing: {cram_gs_path}')
         cram.download_full_gs(gs_path=cram_gs_path, output_filename=output(cram_gs_path))
+        print('Download complete!')
 
     local_crai_path = output(crai_gs_path)
     if not os.path.exists(local_crai_path):
+        print(f'Now downloading for local testing: {crai_gs_path}')
         cram.download_full_gs(gs_path=crai_gs_path, output_filename=output(crai_gs_path))
+        print('Download complete!')
 
-    for cram_uri, crai_uri in (local_cram_path, local_crai_path), (cram_gs_path, crai_gs_path):
+    uris = (local_cram_path, local_crai_path), (cram_gs_path, crai_gs_path)
+    print(f'Beginning tests for: {uris}')
+    for cram_uri, crai_uri in uris:
         for slicing_bool in True, False:
 
             if cram_gs_path == 'gs://lons-test/ce#5b.cram':
@@ -37,7 +43,8 @@ for cram_gs_path, crai_gs_path in cram_crai_pairs:
             elif cram_gs_path == 'gs://lons-test/NWD938777.b38.irc.v1.cram':
                 regions = 'chr1', 'chr2', 'chr1:100,chr2', 'chr23', None
             else:
-                raise NotImplementedError('Add the regions for this cram yo.')
+                print(f'Add the regions for this cram: {cram_gs_path}.  Skipping... ')
+                regions = []
 
             for region in regions:
                 print(f'Now running: {cram_uri} {crai_uri} {region} w/slicing={slicing_bool}')

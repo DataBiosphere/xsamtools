@@ -20,6 +20,11 @@ from urllib.request import urlretrieve
 from google.cloud.storage import Blob
 from terra_notebook_utils import xprofile, gs
 
+try:
+    from gzip import BadGzipFile  # Only on newer versions (py3.8+)
+except ImportError:
+    BadGzipFile = OSError  # Old error that was used
+
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
 

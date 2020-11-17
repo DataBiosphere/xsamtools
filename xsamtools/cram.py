@@ -214,7 +214,7 @@ def read_seq_names_from_sam_header(fh, end_of_header, gzipped=False):
                         sequence[tag_value] = i
             if fh.tell() >= end_of_header:
                 return sequence
-    except gzip.BadGzipFile:
+    except BadGzipFile:
         return sequence
 
 

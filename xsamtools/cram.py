@@ -7,6 +7,7 @@ http://samtools.github.io/hts-specs/CRAMv3.pdf
 import os
 import gzip
 import codecs
+import signal
 import subprocess
 import datetime
 import copy
@@ -27,6 +28,29 @@ except ImportError:
 
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
+
+
+class SubprocessErrorIncludeErrorMessages(subprocess.CalledProcessError):
+    """
+    CalledProcessError that also prints stderr/stdout.
+
+    EXAMPLE:
+        Traceback (most recent call last):
+          File "/home/quokka/git/xsamtools/scrap.py", line 37, in <module>
+            raise SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
+        __main__.SubprocessErrorIncludeErrorMessages: Command 'samtools view -C /home/ubuntu/xsamtools/test-cram-slicing/NWD938777.b38.irc.v1.cram -X /home/ubuntu/xsamtools/test-cram-slicing/NWD938777.b38.irc.v1.cram.crai chr1 > /home/ubuntu/xsamtools/2020-11-17-062709.output.cram' returned non-zero exit status 2.
+
+        ERROR: b'/bin/sh: 1: cannot create /home/ubuntu/xsamtools/2020-11-17-062709.output.cram: Directory nonexistent\n'
+    """
+    def __str__(self):
+        if self.returncode and self.returncode < 0:
+            try:
+                msg = f"Command '{self.cmd}' died with {signal.Signals(-self.returncode)}."
+            except ValueError:
+                msg = f"Command '{self.cmd}' died with unknown signal {-self.returncode}."
+        else:
+            msg = f"Command '{self.cmd}' returned non-zero exit status {self.returncode}."
+        return f"{msg}\n\nERROR: {self.stdout + self.stderr}"
 
 
 def download_full_gs(gs_path: str, output_filename: str = None):
@@ -259,12 +283,10 @@ def write_final_file_with_samtools(cram: str, crai: str, regions: str, cram_form
     cram_format = '-C' if cram_format else ''
     cmd = f'samtools view {cram_format} {cram} -X {crai} {region_args} > {output}'
     log.info(f'Now running: {cmd}')
-    p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    if p.stdout or p.stderr:
-        log.debug(f'\nstdout: {p.stdout}\n')
-        log.debug(f'\nstderr: {p.stderr}\n')
-    else:
-        log.debug(f'Output CRAM successfully generated at: {output}')
+    p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if p.returncode:
+        raise SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
+    log.debug(f'Output CRAM successfully generated at: {output}')
 
 
 def get_crai_indices(crai):

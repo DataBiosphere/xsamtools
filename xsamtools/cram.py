@@ -1,0 +1,127 @@
+"""
+Tools for working with CRAM files.
+
+CRAM/CRAI spec here:
+http://samtools.github.io/hts-specs/CRAMv3.pdf
+"""
+import os
+import signal
+import subprocess
+import datetime
+import logging
+
+from typing import Optional
+from urllib.request import urlretrieve
+from google.cloud.storage import Blob
+from terra_notebook_utils import xprofile, gs
+
+pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+log = logging.getLogger(__name__)
+
+
+def download_full_gs(gs_path: str, output_filename: str = None):
+    # TODO: use gs_chunked_io instead
+    bucket_name, key_name = gs_path[len('gs://'):].split('/', 1)
+    output_filename = output_filename if output_filename else os.path.abspath(os.path.basename(key_name))
+    bucket = gs.get_client().get_bucket(bucket_name)
+    blob = Blob(key_name, bucket)
+    blob.download_to_filename(output_filename)
+    log.debug(f'Entire file "{gs_path}" downloaded to: {output_filename}')
+    return output_filename
+
+
+def format_region_args_for_samtools(regions):
+    return ' '.join(regions.split(',')) if regions else ''
+
+
+def format_and_check_cram(cram):
+    if cram.startswith('file://'):
+        cram = cram[len('file://'):]
+    if ':' in cram:
+        raise NotImplementedError(f'Unsupported schema: {cram}')
+    cram = os.path.abspath(cram)
+    assert os.path.exists(cram)
+    return cram
+
+
+def write_final_file_with_samtools(cram: str,
+                                   crai: Optional[str],
+                                   regions: Optional[str],
+                                   cram_format: bool,
+                                   output: str):
+    region_args = format_region_args_for_samtools(regions)
+    cram_format_arg = '-C' if cram_format else ''
+    crai_arg = f'-X {crai}' if crai else ''
+
+    streaming_script = os.path.join(pkg_root, 'scripts/stream_cloud_file.py')
+
+    if cram.startswith('gs://'):
+        # stream the google object into samtools
+        cmd = f'python {streaming_script} | samtools view {cram_format_arg} {cram} {crai_arg} {region_args} -'
+    else:
+        assert os.path.exists(cram), f'Local file "{cram}" does not exist.'
+        cmd = f'samtools view {cram_format_arg} {cram} -X {crai} {region_args}'
+
+    log.info(f'Now running: {cmd}')
+    subprocess.run(cmd, shell=True, stdout=open(output, 'w'), stderr=subprocess.PIPE, check=True)
+    log.debug(f'Output CRAM successfully generated at: {output}')
+
+
+def stage_crai(crai: str, output: str):
+    """
+    Always make the crai available locally for samtools to use.
+
+    This also allows the crai to be placed in the same folder as its associated
+    cram file, which samtools can be picky about.
+    """
+    if crai.startswith('gs://'):
+        download_full_gs(crai, output_filename=output)
+    elif crai.startswith('file://'):
+        if os.path.abspath(crai[len('file://'):]) != os.path.abspath(output):
+            os.link(crai[len('file://'):], output)
+    elif crai.startswith('http://') or crai.startswith('https://'):
+        urlretrieve(crai, output)
+    elif ':' not in crai:
+        if os.path.abspath(crai) != os.path.abspath(output):
+            os.link(crai, output)
+    else:
+        raise NotImplementedError(f'Unsupported format: {crai}')
+
+
+def stage_cram(cram: str):
+    """Check that the cram is a valid input."""
+    if cram.startswith('gs://'):
+        return cram
+    elif cram.startswith('file://'):
+        cram = cram[len('file://'):]
+
+    if ':' in cram:
+        raise NotImplementedError(f'Unsupported format: {cram}')
+
+    cram = os.path.abspath(cram)
+    assert os.path.exists(cram), f'Input cram does not exist: {cram}'
+    return cram
+
+
+def timestamped_filename(cram_format):
+    time_stamp = str(datetime.datetime.now()).split('.')[0].replace(':', '').replace(' ', '-')
+    extension = 'cram' if cram_format else 'sam'
+    return os.path.abspath(f'{time_stamp}.output.{extension}')
+
+
+@xprofile.profile("xsamtools cram view")
+def view(cram: str,
+         crai: Optional[str],
+         regions: Optional[str],
+         output: Optional[str] = None,
+         cram_format: bool = True):
+    crai = stage_crai(crai, output=f'{output}.crai') if crai else crai
+    cram = stage_cram(cram)
+
+    output = output or timestamped_filename(cram_format)
+    output = output[len('file://'):] if output.startswith('file://') else output
+    assert ':' not in output, f'Unsupported schema for output: "{output}".\n' \
+                              f'Only local file outputs are currently supported.'
+
+    write_final_file_with_samtools(cram=cram, crai=crai, regions=regions, cram_format=cram_format, output=output)
+    return output

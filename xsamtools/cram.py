@@ -19,6 +19,29 @@ pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 log = logging.getLogger(__name__)
 
 
+class SubprocessErrorIncludeErrorMessages(subprocess.CalledProcessError):
+    """
+    CalledProcessError that also prints stderr/stdout.
+
+    EXAMPLE:
+        Traceback (most recent call last):
+          File "/home/quokka/git/xsamtools/scrap.py", line 37, in <module>
+            raise SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
+        __main__.SubprocessErrorIncludeErrorMessages: Command 'samtools view -C /home/ubuntu/xsamtools/test-cram-slicing/NWD938777.b38.irc.v1.cram -X /home/ubuntu/xsamtools/test-cram-slicing/NWD938777.b38.irc.v1.cram.crai chr1 > /home/ubuntu/xsamtools/2020-11-17-062709.output.cram' returned non-zero exit status 2.
+
+        ERROR: b'/bin/sh: 1: cannot create /home/ubuntu/xsamtools/2020-11-17-062709.output.cram: Directory nonexistent\n'
+    """
+    def __str__(self):
+        if self.returncode and self.returncode < 0:
+            try:
+                msg = f"Command '{self.cmd}' died with {signal.Signals(-self.returncode)}."
+            except ValueError:
+                msg = f"Command '{self.cmd}' died with unknown signal {-self.returncode}."
+        else:
+            msg = f"Command '{self.cmd}' returned non-zero exit status {self.returncode}."
+        return f"{msg}\n\nERROR: {self.stdout + self.stderr}"
+
+
 def download_full_gs(gs_path: str, output_filename: str = None):
     # TODO: use gs_chunked_io instead
     bucket_name, key_name = gs_path[len('gs://'):].split('/', 1)
@@ -63,7 +86,9 @@ def write_final_file_with_samtools(cram: str,
         cmd = f'samtools view {cram_format_arg} {cram} -X {crai} {region_args}'
 
     log.info(f'Now running: {cmd}')
-    subprocess.run(cmd, shell=True, stdout=open(output, 'w'), stderr=subprocess.PIPE, check=True)
+    p = subprocess.run(cmd, shell=True, stdout=open(output, 'w'), stderr=subprocess.PIPE)
+    if p.returncode:
+        raise SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
     log.debug(f'Output CRAM successfully generated at: {output}')
 
 

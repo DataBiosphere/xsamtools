@@ -26,7 +26,7 @@ def download_full_gs(gs_path: str, output_filename: str = None) -> str:
     # TODO: use gs_chunked_io instead
     bucket_name, key_name = gs_path[len('gs://'):].split('/', 1)
     output_filename = output_filename if output_filename else os.path.abspath(os.path.basename(key_name))
-    blob = gs_utils._blob_for_url(gs_utils)
+    blob = gs_utils._blob_for_url(gs_path)
     blob.download_to_filename(output_filename)
     log.debug(f'Entire file "{gs_path}" downloaded to: {output_filename}')
     return output_filename

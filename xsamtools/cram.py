@@ -78,13 +78,12 @@ def write_final_file_with_samtools(cram: str,
 
     streaming_script = os.path.join(pkg_root, 'scripts/stream_cloud_file.py')
 
-    samtools_cmd = f'samtools view {cram_format_arg} {cram} {crai_arg} {region_args}'
     if cram.startswith('gs://'):
         # stream the google object into samtools
-        cmd = f'python {streaming_script} | {samtools_cmd} -'
+        cmd = f'python {streaming_script} --path {cram} | samtools view {cram_format_arg} {crai_arg} {region_args} -'
     else:
         assert os.path.exists(cram), f'Local file "{cram}" does not exist.'
-        cmd = samtools_cmd
+        cmd = f'samtools view {cram_format_arg} {cram} {crai_arg} {region_args}'
 
     log.info(f'Now running: {cmd}')
     p = subprocess.run(cmd, shell=True, stdout=open(output, 'w'), stderr=subprocess.PIPE)

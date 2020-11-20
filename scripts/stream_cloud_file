@@ -20,7 +20,7 @@ stdin I was piping in.
 def main(argv=sys.argv[1:]):
     parser = argparse.ArgumentParser(description='Streams out a provided gs:// file path.',
                                      formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--path', type=str, help='A google path to stream.')
+    parser.add_argument('--path', type=str, required=True, help='A google path to stream.')
     parser.add_argument('--buffer', type=int, default=16384, help='Size of the buffer used to stream a single file.')
     o = parser.parse_args(argv)
 

@@ -8,6 +8,7 @@ import os
 import subprocess
 import datetime
 import logging
+import signal
 
 from uuid import uuid4
 from typing import Optional

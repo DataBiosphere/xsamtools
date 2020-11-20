@@ -5,14 +5,15 @@ CRAM/CRAI spec here:
 http://samtools.github.io/hts-specs/CRAMv3.pdf
 """
 import os
-import signal
 import subprocess
 import datetime
 import logging
+import signal
 import gzip
 import codecs
 
 from collections import namedtuple
+from uuid import uuid4
 from typing import Optional
 from urllib.request import urlretrieve
 from google.cloud.storage import Blob
@@ -44,7 +45,7 @@ class SubprocessErrorIncludeErrorMessages(subprocess.CalledProcessError):
                 msg = f"Command '{self.cmd}' died with unknown signal {-self.returncode}."
         else:
             msg = f"Command '{self.cmd}' returned non-zero exit status {self.returncode}."
-        return f"{msg}\n\nERROR: {self.stdout + self.stderr}"
+        return f"{msg}\n\nERROR: {self.stderr}"
 
 
 def get_crai_indices(crai):
@@ -89,17 +90,13 @@ def write_final_file_with_samtools(cram: str,
                                    output: str):
     region_args = format_region_args_for_samtools(regions)
     cram_format_arg = '-C' if cram_format else ''
-    crai_arg = f'-X {crai}' if crai else ''
-
-    streaming_script = os.path.join(pkg_root, 'scripts/stream_cloud_file.py')
-
-    samtools_cmd = f'samtools view {cram_format_arg} {cram} {crai_arg} {region_args}'
-    if cram.startswith('gs://'):
-        # stream the google object into samtools
-        cmd = f'python {streaming_script} | {samtools_cmd} -'
+    if crai:
+        crai_arg = f'-X {crai}'
     else:
-        assert os.path.exists(cram), f'Local file "{cram}" does not exist.'
-        cmd = samtools_cmd
+        log.warning('No crai file present, this may take a while.')
+        crai_arg = ''
+
+    cmd = f'samtools view {cram_format_arg} {cram} {crai_arg} {region_args}'
 
     log.info(f'Now running: {cmd}')
     p = subprocess.run(cmd, shell=True, stdout=open(output, 'w'), stderr=subprocess.PIPE)
@@ -129,19 +126,39 @@ def stage_crai(crai: str, output: str):
         raise NotImplementedError(f'Unsupported format: {crai}')
 
 
-def stage_cram(cram: str):
-    """Check that the cram is a valid input."""
-    if cram.startswith('gs://'):
-        return cram
-    elif cram.startswith('file://'):
-        cram = cram[len('file://'):]
+def stage_cram(cram: str, output: str):
+    """
+    Always make the cram available locally for samtools to use.
 
-    if ':' in cram:
+    This also allows the cram to be placed in the same folder as its associated
+    cram file, which samtools can be picky about.
+    """
+    if cram.startswith('gs://'):
+        download_full_gs(cram, output_filename=output)
+    elif cram.startswith('file://'):
+        if os.path.abspath(cram[len('file://'):]) != os.path.abspath(output):
+            os.link(cram[len('file://'):], output)
+    elif cram.startswith('http://') or cram.startswith('https://'):
+        urlretrieve(cram, output)
+    elif ':' not in cram:
+        if os.path.abspath(cram) != os.path.abspath(output):
+            os.link(cram, output)
+    else:
         raise NotImplementedError(f'Unsupported format: {cram}')
 
-    cram = os.path.abspath(cram)
-    assert os.path.exists(cram), f'Input cram does not exist: {cram}'
-    return cram
+
+def stage_files_locally(cram: str, crai: Optional[str]):
+    # samtools exhibits odd behavior sometimes if the cram and crai are in separate folders; keep them together
+    staging_dir = f'/tmp/{uuid4()}/'
+    os.makedirs(staging_dir)
+    staged_cram = os.path.join(staging_dir, f'tmp.cram')
+    stage_cram(cram=cram, output=staged_cram)
+    if crai:
+        staged_crai = os.path.join(staging_dir, f'tmp.crai')
+        stage_crai(crai=crai, output=staged_crai)
+    else:
+        staged_crai = None
+    return staged_cram, staged_crai
 
 
 def timestamped_filename(cram_format):
@@ -156,13 +173,18 @@ def view(cram: str,
          regions: Optional[str],
          output: Optional[str] = None,
          cram_format: bool = True):
-    crai = stage_crai(crai, output=f'{output}.crai') if crai else crai
-    cram = stage_cram(cram)
-
     output = output or timestamped_filename(cram_format)
     output = output[len('file://'):] if output.startswith('file://') else output
     assert ':' not in output, f'Unsupported schema for output: "{output}".\n' \
                               f'Only local file outputs are currently supported.'
 
-    write_final_file_with_samtools(cram=cram, crai=crai, regions=regions, cram_format=cram_format, output=output)
+    staged_files = []
+    try:
+        cram, crai = staged_files = stage_files_locally(cram=cram, crai=crai)
+        write_final_file_with_samtools(cram=cram, crai=crai, regions=regions, cram_format=cram_format, output=output)
+    finally:
+        # clean up
+        for staged_file in staged_files:
+            if os.path.exists(staged_file):
+                os.remove(staged_file)
     return output

@@ -74,7 +74,11 @@ def write_final_file_with_samtools(cram: str,
                                    output: str):
     region_args = format_region_args_for_samtools(regions)
     cram_format_arg = '-C' if cram_format else ''
-    crai_arg = f'-X {crai}' if crai else ''
+    if crai:
+        crai_arg = f'-X {crai}'
+    else:
+        log.warning('No crai file present, this may take a while.')
+        crai_arg = ''
 
     streaming_script = os.path.join(pkg_root, 'scripts/stream_cloud_file')
 
@@ -111,6 +115,7 @@ def stage_crai(crai: str, output: str):
             os.link(crai, output)
     else:
         raise NotImplementedError(f'Unsupported format: {crai}')
+    return output
 
 
 def stage_cram(cram: str):

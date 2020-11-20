@@ -37,6 +37,4 @@ def view(args: argparse.Namespace):
     """
     A limited wrapper around "samtools view", but with functions to operate on google cloud bucket keys.
     """
-    if '://' in args.output and not args.output.startswith('file://'):
-        raise NotImplementedError(f'Schema not yet supported: {args.output}')
     cram.view(cram=args.cram, crai=args.crai, regions=args.regions, output=args.output, cram_format=args.C)

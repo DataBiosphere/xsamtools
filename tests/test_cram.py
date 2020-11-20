@@ -23,12 +23,12 @@ class TestCram(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        # TODO: Add blob exists check to xsamtools.gs_utils and conditionally repopulate fixtures if missing.
+        # TODO: Add blob exists check to xsamtools.gs_utils and conditionally repopulate fixtures if missing
+        cls.clean_up = []
         cls.cram_gs_path = 'gs://lons-test/ce#5b.cram'
         cls.cram_local_path = os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram')
         cls.crai_gs_path = 'gs://lons-test/ce#5b.cram.crai'
         cls.crai_local_path = os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram.crai')
-
         # basically the entire contents of ce#5b.cram
         cls.regions = {
             'CHROMOSOME_I': {
@@ -96,6 +96,12 @@ class TestCram(unittest.TestCase):
                     b''
             },
         }
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        for file in cls.clean_up:
+            if os.path.exists(file):
+                os.remove(file)
 
     def assert_cram_view_with_no_regions_generates_identical_output(self, cram_uri, crai_uri):
         # use samtools to create a cram file from a cram file with no regions specified

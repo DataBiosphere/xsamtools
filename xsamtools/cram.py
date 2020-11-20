@@ -39,7 +39,7 @@ class SubprocessErrorIncludeErrorMessages(subprocess.CalledProcessError):
                 msg = f"Command '{self.cmd}' died with unknown signal {-self.returncode}."
         else:
             msg = f"Command '{self.cmd}' returned non-zero exit status {self.returncode}."
-        return f"{msg}\n\nERROR: {self.stdout + self.stderr}"
+        return f"{msg}\n\nERROR: {self.stderr}"
 
 
 def download_full_gs(gs_path: str, output_filename: str = None):

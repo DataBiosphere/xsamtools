@@ -84,10 +84,10 @@ def write_final_file_with_samtools(cram: str,
 
     if cram.startswith('gs://'):
         # stream the google object into samtools
-        cmd = f'{streaming_script} --path {cram} | samtools view {cram_format_arg} - {crai_arg} {region_args}'
+        cmd = f'{streaming_script} --path {cram} | samtools view - {cram_format_arg} {crai_arg} {region_args}'
     else:
         assert os.path.exists(cram), f'Local file "{cram}" does not exist.'
-        cmd = f'samtools view {cram_format_arg} {cram} {crai_arg} {region_args}'
+        cmd = f'samtools view {cram} {cram_format_arg} {crai_arg} {region_args}'
 
     log.info(f'Now running: {cmd}')
     p = subprocess.run(cmd, shell=True, stdout=open(output, 'w'), stderr=subprocess.PIPE)
@@ -145,13 +145,13 @@ def view(cram: str,
          regions: Optional[str],
          output: Optional[str] = None,
          cram_format: bool = True):
-    crai = stage_crai(crai, output=f'{output}.crai') if crai else crai
-    cram = stage_cram(cram)
-
     output = output or timestamped_filename(cram_format)
     output = output[len('file://'):] if output.startswith('file://') else output
     assert ':' not in output, f'Unsupported schema for output: "{output}".\n' \
                               f'Only local file outputs are currently supported.'
+
+    crai = stage_crai(crai, output=f'{output}.crai') if crai else crai
+    cram = stage_cram(cram)
 
     write_final_file_with_samtools(cram=cram, crai=crai, regions=regions, cram_format=cram_format, output=output)
     return output

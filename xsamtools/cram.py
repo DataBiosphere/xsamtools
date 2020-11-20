@@ -80,7 +80,7 @@ def write_final_file_with_samtools(cram: str,
 
     if cram.startswith('gs://'):
         # stream the google object into samtools
-        cmd = f'python {streaming_script} --path {cram} | samtools view {cram_format_arg} {crai_arg} {region_args} -'
+        cmd = f'python {streaming_script} --path {cram} | samtools view {cram_format_arg} - {crai_arg} {region_args}'
     else:
         assert os.path.exists(cram), f'Local file "{cram}" does not exist.'
         cmd = f'samtools view {cram_format_arg} {cram} {crai_arg} {region_args}'

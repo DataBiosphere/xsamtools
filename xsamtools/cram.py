@@ -53,7 +53,7 @@ def write_final_file_with_samtools(cram: str,
     cram_format_arg = '-C' if cram_format else ''
     crai_arg = f'-X {crai}' if crai else ''
 
-    streaming_script = os.path.join(pkg_root, 'scripts/stream_cloud_file.py')
+    streaming_script = os.path.join(pkg_root, 'scripts/stream_cloud_file')
 
     if cram.startswith('gs://'):
         # stream the google object into samtools

@@ -120,7 +120,7 @@ class TestCram(unittest.TestCase):
 
         # check that they are the same and that the length is not zero
         self.assertTrue(expected_sam_stdout == sam_stdout)
-        self.assertTrue(len(sam_stdout) == 2588)
+        self.assertTrue(len(sam_stdout) > 2000)
 
         # NOTE: Cannot use: self.assertEqual(os.stat(cram_output).st_size, os.stat(self.test_cram).st_size)
         # The content of the cram files is the same, but the output cram is more deeply compressed.

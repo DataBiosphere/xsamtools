@@ -11,7 +11,6 @@ sys.path.insert(0, pkg_root)  # noqa
 
 from xsamtools import cram  # noqa
 
-WORKSPACE_BUCKET = 'fc-9169fcd1-92ce-4d60-9d2d-d19fd326ff10'
 log = logging.getLogger(__name__)
 
 
@@ -24,13 +23,12 @@ class TestCram(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
+        # TODO: Add blob exists check to xsamtools.gs_utils and conditionally repopulate fixtures if missing
+        cls.clean_up = []
         cls.cram_gs_path = 'gs://lons-test/ce#5b.cram'
-        cls.cram_local_path = cram.download_full_gs(gs_path=cls.cram_gs_path,
-                                                    output_filename=os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram'))
+        cls.cram_local_path = os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram')
         cls.crai_gs_path = 'gs://lons-test/ce#5b.cram.crai'
-        cls.crai_local_path = cram.download_full_gs(gs_path=cls.crai_gs_path,
-                                                    output_filename=os.path.join(pkg_root, 'tests/fixtures/ce#5b.crai'))
-        cls.clean_up = [cls.cram_local_path, cls.crai_local_path]
+        cls.crai_local_path = os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram.crai')
         # basically the entire contents of ce#5b.cram
         cls.regions = {
             'CHROMOSOME_I': {
@@ -122,7 +120,7 @@ class TestCram(unittest.TestCase):
 
         # check that they are the same and that the length is not zero
         self.assertTrue(expected_sam_stdout == sam_stdout)
-        self.assertTrue(len(sam_stdout) == 2588)
+        self.assertTrue(len(sam_stdout) > 2000)
 
         # NOTE: Cannot use: self.assertEqual(os.stat(cram_output).st_size, os.stat(self.test_cram).st_size)
         # The content of the cram files is the same, but the output cram is more deeply compressed.

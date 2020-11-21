@@ -14,15 +14,17 @@ import codecs
 
 from collections import namedtuple
 from uuid import uuid4
+from tempfile import TemporaryDirectory
 from typing import Optional
 from urllib.request import urlretrieve
-from google.cloud.storage import Blob
 from terra_notebook_utils import xprofile, gs
 
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 log = logging.getLogger(__name__)
+
+from xsamtools import gs_utils
 
 
 class SubprocessErrorIncludeErrorMessages(subprocess.CalledProcessError):
@@ -47,7 +49,6 @@ class SubprocessErrorIncludeErrorMessages(subprocess.CalledProcessError):
             msg = f"Command '{self.cmd}' returned non-zero exit status {self.returncode}."
         return f"{msg}\n\nERROR: {self.stderr}"
 
-
 def get_crai_indices(crai):
     crai_indices = []
     with open(crai, "rb") as fh:
@@ -57,23 +58,16 @@ def get_crai_indices(crai):
                     crai_indices.append(CramLocation(*[int(d) for d in line.split("\t")]))
     return crai_indices
 
-
-def download_full_gs(gs_path: str, output_filename: str = None):
+def download_full_gs(gs_path: str, output_filename: str = None) -> str:
     # TODO: use gs_chunked_io instead
     bucket_name, key_name = gs_path[len('gs://'):].split('/', 1)
     output_filename = output_filename if output_filename else os.path.abspath(os.path.basename(key_name))
-    bucket = gs.get_client().get_bucket(bucket_name)
-    blob = Blob(key_name, bucket)
+    blob = gs_utils._blob_for_url(gs_path)
     blob.download_to_filename(output_filename)
     log.debug(f'Entire file "{gs_path}" downloaded to: {output_filename}')
     return output_filename
 
-
-def format_region_args_for_samtools(regions):
-    return ' '.join(regions.split(',')) if regions else ''
-
-
-def format_and_check_cram(cram):
+def format_and_check_cram(cram: str) -> str:
     if cram.startswith('file://'):
         cram = cram[len('file://'):]
     if ':' in cram:
@@ -82,13 +76,12 @@ def format_and_check_cram(cram):
     assert os.path.exists(cram)
     return cram
 
-
 def write_final_file_with_samtools(cram: str,
                                    crai: Optional[str],
                                    regions: Optional[str],
                                    cram_format: bool,
-                                   output: str):
-    region_args = format_region_args_for_samtools(regions)
+                                   output: str) -> None:
+    region_args = ' '.join(regions.split(',')) if regions else ''
     cram_format_arg = '-C' if cram_format else ''
     if crai:
         crai_arg = f'-X {crai}'
@@ -104,87 +97,51 @@ def write_final_file_with_samtools(cram: str,
         raise SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
     log.debug(f'Output CRAM successfully generated at: {output}')
 
-
-def stage_crai(crai: str, output: str):
+def stage(uri: str, output: str) -> None:
     """
-    Always make the crai available locally for samtools to use.
+    Make a file available locally for samtools to use.
 
-    This also allows the crai to be placed in the same folder as its associated
-    cram file, which samtools can be picky about.
+    This also allows the file to be placed in the same folder as associated
+    files, like cram and crai, which samtools can be picky about.
     """
-    if crai.startswith('gs://'):
-        download_full_gs(crai, output_filename=output)
-    elif crai.startswith('file://'):
-        if os.path.abspath(crai[len('file://'):]) != os.path.abspath(output):
-            os.link(crai[len('file://'):], output)
-    elif crai.startswith('http://') or crai.startswith('https://'):
-        urlretrieve(crai, output)
-    elif ':' not in crai:
-        if os.path.abspath(crai) != os.path.abspath(output):
-            os.link(crai, output)
+    if uri.startswith('gs://'):
+        download_full_gs(uri, output_filename=output)
+    elif uri.startswith('file://'):
+        if os.path.abspath(uri[len('file://'):]) != os.path.abspath(output):
+            os.link(uri[len('file://'):], output)
+    elif uri.startswith('http://') or uri.startswith('https://'):
+        urlretrieve(uri, output)
+    elif ':' not in uri:
+        if os.path.abspath(uri) != os.path.abspath(output):
+            os.link(uri, output)
     else:
-        raise NotImplementedError(f'Unsupported format: {crai}')
+        raise NotImplementedError(f'Unsupported format: {uri}')
 
-
-def stage_cram(cram: str, output: str):
-    """
-    Always make the cram available locally for samtools to use.
-
-    This also allows the cram to be placed in the same folder as its associated
-    cram file, which samtools can be picky about.
-    """
-    if cram.startswith('gs://'):
-        download_full_gs(cram, output_filename=output)
-    elif cram.startswith('file://'):
-        if os.path.abspath(cram[len('file://'):]) != os.path.abspath(output):
-            os.link(cram[len('file://'):], output)
-    elif cram.startswith('http://') or cram.startswith('https://'):
-        urlretrieve(cram, output)
-    elif ':' not in cram:
-        if os.path.abspath(cram) != os.path.abspath(output):
-            os.link(cram, output)
-    else:
-        raise NotImplementedError(f'Unsupported format: {cram}')
-
-
-def stage_files_locally(cram: str, crai: Optional[str]):
-    # samtools exhibits odd behavior sometimes if the cram and crai are in separate folders; keep them together
-    staging_dir = f'/tmp/{uuid4()}/'
-    os.makedirs(staging_dir)
-    staged_cram = os.path.join(staging_dir, f'tmp.cram')
-    stage_cram(cram=cram, output=staged_cram)
-    if crai:
-        staged_crai = os.path.join(staging_dir, f'tmp.crai')
-        stage_crai(crai=crai, output=staged_crai)
-    else:
-        staged_crai = None
-    return staged_cram, staged_crai
-
-
-def timestamped_filename(cram_format):
-    time_stamp = str(datetime.datetime.now()).split('.')[0].replace(':', '').replace(' ', '-')
+def timestamped_filename(cram_format: bool) -> str:
+    time_stamp = datetime.datetime.now().strftime("%Y-%m-%d-%H%M%S")
     extension = 'cram' if cram_format else 'sam'
     return os.path.abspath(f'{time_stamp}.output.{extension}')
-
 
 @xprofile.profile("xsamtools cram view")
 def view(cram: str,
          crai: Optional[str],
          regions: Optional[str],
          output: Optional[str] = None,
-         cram_format: bool = True):
+         cram_format: bool = True) -> str:
     output = output or timestamped_filename(cram_format)
     output = output[len('file://'):] if output.startswith('file://') else output
     assert ':' not in output, f'Unsupported schema for output: "{output}".\n' \
                               f'Only local file outputs are currently supported.'
 
-    staged_files = []
-    try:
-        cram, crai = staged_files = stage_files_locally(cram=cram, crai=crai)
-        write_final_file_with_samtools(cram=cram, crai=crai, regions=regions, cram_format=cram_format, output=output)
-    finally:
-        # clean up
-        for staged_file in staged_files:
-            if os.path.exists(staged_file):
-                os.remove(staged_file)
+    with TemporaryDirectory() as staging_dir:
+        staged_cram = os.path.join(staging_dir, f'tmp.cram')
+        stage(uri=cram, output=staged_cram)
+        if crai:
+            staged_crai = os.path.join(staging_dir, f'tmp.crai')
+            stage(uri=crai, output=staged_crai)
+        else:
+            staged_crai = None
+
+        write_final_file_with_samtools(staged_cram, staged_crai, regions, cram_format, output)
+
     return output

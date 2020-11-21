@@ -1,5 +1,5 @@
 """
-CRAM file utilities
+CRAM file utilities.
 """
 import argparse
 

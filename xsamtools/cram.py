@@ -13,7 +13,6 @@ import gzip
 import codecs
 
 from collections import namedtuple
-from uuid import uuid4
 from tempfile import TemporaryDirectory
 from typing import Optional
 from urllib.request import urlretrieve

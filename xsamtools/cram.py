@@ -8,6 +8,7 @@ import os
 import subprocess
 import datetime
 import logging
+import signal
 
 from tempfile import TemporaryDirectory
 from typing import Optional

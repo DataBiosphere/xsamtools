@@ -127,6 +127,32 @@ class TestCram(unittest.TestCase):
         # The output file size may continue to change as the samtools version, and the cram spec changes.
         # This check allows us to change samtools versions without significant changes to the test.
 
+    def cram_cli(self, cram_uri, crai_uri):
+        cmd = f'xsamtools view --cram {cram_uri} --crai {crai_uri}'
+        log.info(f'Now running: {cmd}')
+        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if p.returncode:
+            raise cram.SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
+        self.clean_up.append(p.stdout)
+
+        # view the INPUT cram as human readable
+        cmd = f'samtools view {cram_uri} -X {crai_uri}'
+        log.info(f'Now running: {cmd}')
+        p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if p.returncode:
+            raise cram.SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
+        input_contents = p.stdout
+
+        # view the OUTPUT cram as human readable
+        cmd = f'samtools view {p.stdout} -X {crai_uri}'
+        log.info(f'Now running: {cmd}')
+        p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if p.returncode:
+            raise cram.SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
+        output_contents = p.stdout
+        assert input_contents == output_contents
+
+
     def cram_view_with_regions(self, cram_uri, crai_uri, regions):
         cram_output = cram.view(cram=cram_uri, crai=crai_uri, regions=regions, cram_format=True)
         self.clean_up.append(cram_output)
@@ -179,18 +205,25 @@ class TestCram(unittest.TestCase):
                                      self.regions['CHROMOSOME_III']['expected_output'] +
                                      self.regions['CHROMOSOME_IV']['expected_output'])
 
+    def test_cram_view_cli_with_no_regions(self):
+        with self.subTest('[CLI] View cram for local files (no regions).'):
+            self.cram_cli(self.cram_local_path, self.crai_local_path)
+
+        with self.subTest('[CLI] View cram for gs:// files (no regions).'):
+            self.assert_cram_view_with_no_regions_generates_identical_output(self.cram_gs_path, self.crai_gs_path)
+
     def test_cram_view_api_with_no_regions(self):
-        with self.subTest('View cram for local files (no regions).'):
+        with self.subTest('[API] View cram for local files (no regions).'):
             self.assert_cram_view_with_no_regions_generates_identical_output(self.cram_local_path, self.crai_local_path)
 
-        with self.subTest('View cram for gs:// files (no regions).'):
+        with self.subTest('[API] View cram for gs:// files (no regions).'):
             self.assert_cram_view_with_no_regions_generates_identical_output(self.cram_gs_path, self.crai_gs_path)
 
     def test_cram_view_api_with_regions(self):
-        with self.subTest('View cram for local files (regions).'):
+        with self.subTest('[API] View cram for local files (regions).'):
             self.run_cram_view_api_with_regions(self.cram_local_path, self.crai_local_path)
 
-        with self.subTest('View cram for gs:// files (regions).'):
+        with self.subTest('[API] View cram for gs:// files (regions).'):
             self.run_cram_view_api_with_regions(self.cram_gs_path, self.crai_gs_path)
 
     def test_read_crai(self):

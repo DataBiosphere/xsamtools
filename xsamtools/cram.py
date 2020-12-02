@@ -10,6 +10,7 @@ import datetime
 import logging
 import gzip
 import io
+import numpy as np
 
 from collections import namedtuple
 from tempfile import TemporaryDirectory
@@ -49,6 +50,56 @@ def read_fixed_length_cram_file_definition(fh: io.BytesIO):
         'major_version': int.from_bytes(fh.read(1), byteorder='little'),  # order shouldn't matter with 1 byte
         'minor_version': int.from_bytes(fh.read(1), byteorder='little'),  # but it's required
         'file_id': fh.read(20).decode('utf-8')
+    }
+
+def read_cram_container_header(fh: io.BytesIO):
+    """
+    From an open BytesIO handle, returns a dictionary of the contents of a CRAM container header.
+
+    The file definition is followed by one or more containers with the following header structure where the container
+    content is stored in the ‘blocks’ field:
+
+    -----------------------------------------------------------------------------------------------------------
+    | Data Type      Name                        Value                                                        |
+    -----------------------------------------------------------------------------------------------------------
+    | INT32          length                      The sum of the lengths of all blocks in this container       |
+    |                                              (headers and data); equal to the total byte length of the  |
+    |                                              container minus the byte length of this header structure.  |
+    | ITF-8           reference sequence id      Reference sequence identifier or:                            |
+    |                                               -1 for unmapped reads                                     |
+    |                                               -2 for multiple reference sequences                       |
+    |                                            All slices in this container must have a reference sequence  |
+    |                                              id matching this value.                                    |
+    | ITF-8           reference start position   The alignment start position or 0 if the container is        |
+    |                                              multiple-reference or contains unmapped unplaced reads     |
+    | ITF-8           alignment span             The length of the alignment or 0 if the container is         |
+    |                                              multiple-reference or contains unmapped unplaced reads.    |
+    | ITF-8           number of records          Number of records in the container.                          |
+    | LTF-8           record counter             1-based sequential index of records in the file/stream.      |
+    | LTF-8           bases                      Number of read bases.                                        |
+    | ITF-8           number of blocks           The total number of blocks in this container.                |
+    | Array<ITF-8>    landmarks                  The locations of slices in this container as byte offsets    |
+    |                                             from the end of this container header, used for random      |
+    |                                             access indexing. The landmark count must equal the slice    |
+    |                                             count.  Since the block before the first slice is the       |
+    |                                             compression header, landmarks[0] is equal to the byte       |
+    |                                             length of the compression header.                           |
+    | INT             crc32                      CRC32 hash of the all the preceding bytes in the container.  |
+    -----------------------------------------------------------------------------------------------------------
+    :param fh:
+    :return:
+    """
+    return {
+        "length": np.frombuffer(fh.read(np.dtype(np.int32).itemsize), np.dtype(np.int32))[0],
+        "reference_sequence_id": decode_itf8(fh),
+        "starting_position": decode_itf8(fh),
+        "alignment_span": decode_itf8(fh),
+        "number_of_records": decode_itf8(fh),
+        "record_counter": decode_itf8(fh),
+        "bases": decode_itf8(fh),
+        "number_of_blocks": decode_itf8(fh),
+        "landmark": decode_itf8_array(fh),
+        "crc_hash": fh.read(4)
     }
 
 def next_int(fh: io.BytesIO) -> int:

@@ -233,6 +233,14 @@ class TestCram(unittest.TestCase):
     def test_read_crai(self):
         self.assertEqual(len(cram.get_crai_indices(self.crai_local_path)), 5)
 
+    def test_read_cram_file_definition(self):
+        expected = {'cram': 'CRAM',
+                    'major_version': 2,
+                    'minor_version': 0,
+                    'file_id': '-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'}
+        with open(self.cram_local_path, 'rb') as f:
+            cram_file_definition = cram.file_definition(f)
+        self.assertEqual(cram_file_definition, expected, f'{cram_file_definition} is not: {expected}')
 
 if __name__ == '__main__':
     unittest.main()

@@ -22,6 +22,13 @@ from xsamtools import gs_utils
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
 
+def file_definition(fh):
+    return {
+        'cram': fh.read(4).decode('utf-8'),
+        'major_version': int.from_bytes(fh.read(1), byteorder='little'),  # order shouldn't matter with 1 byte
+        'minor_version': int.from_bytes(fh.read(1), byteorder='little'),  # but it's required
+        'file_id': fh.read(20).decode('utf-8')
+    }
 
 def get_crai_indices(crai):
     crai_indices = []

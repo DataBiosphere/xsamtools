@@ -5,6 +5,8 @@ import unittest
 import subprocess
 import logging
 
+from uuid import uuid4
+
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
@@ -122,6 +124,34 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
         # The output file size may continue to change as the samtools version, and the cram spec changes.
         # This check allows us to change samtools versions without significant changes to the test.
 
+    def cram_cli(self, cram_uri, crai_uri):
+        output_file = str(uuid4())
+        self.clean_up.append(output_file)
+        cmd = f'xsamtools cram view --cram {cram_uri} --crai {crai_uri} -C --output {output_file}'
+        log.info(f'Now running: {cmd}')
+        p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        self.clean_up.append(p.stdout)
+
+        # samtools can't handle gs uris
+        if cram_uri == self.cram_gs_path:
+            cram_uri = self.cram_local_path
+        if crai_uri == self.crai_gs_path:
+            crai_uri = self.crai_local_path
+
+        # view the INPUT cram as human readable
+        cmd = f'samtools view {cram_uri} -X {crai_uri}'
+        log.info(f'Now running: {cmd}')
+        p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        input_contents = p.stdout
+
+        # view the OUTPUT cram as human readable
+        cmd = f'samtools view {output_file} -X {crai_uri}'
+        log.info(f'Now running: {cmd}')
+        p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        output_contents = p.stdout
+        assert input_contents == output_contents
+
+
     def cram_view_with_regions(self, cram_uri, crai_uri, regions):
         cram_output = cram.view(cram=cram_uri, crai=crai_uri, regions=regions, cram_format=True)
         self.clean_up.append(cram_output)
@@ -174,18 +204,25 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
                                      self.regions['CHROMOSOME_III']['expected_output'] +
                                      self.regions['CHROMOSOME_IV']['expected_output'])
 
+    def test_cram_view_cli_with_no_regions(self):
+        with self.subTest('[CLI] View cram for local files (no regions).'):
+            self.cram_cli(self.cram_local_path, self.crai_local_path)
+
+        with self.subTest('[CLI] View cram for gs:// files (no regions).'):
+            self.cram_cli(self.cram_gs_path, self.crai_gs_path)
+
     def test_cram_view_api_with_no_regions(self):
-        with self.subTest('View cram for local files (no regions).'):
+        with self.subTest('[API] View cram for local files (no regions).'):
             self.assert_cram_view_with_no_regions_generates_identical_output(self.cram_local_path, self.crai_local_path)
 
-        with self.subTest('View cram for gs:// files (no regions).'):
+        with self.subTest('[API] View cram for gs:// files (no regions).'):
             self.assert_cram_view_with_no_regions_generates_identical_output(self.cram_gs_path, self.crai_gs_path)
 
     def test_cram_view_api_with_regions(self):
-        with self.subTest('View cram for local files (regions).'):
+        with self.subTest('[API] View cram for local files (regions).'):
             self.run_cram_view_api_with_regions(self.cram_local_path, self.crai_local_path)
 
-        with self.subTest('View cram for gs:// files (regions).'):
+        with self.subTest('[API] View cram for gs:// files (regions).'):
             self.run_cram_view_api_with_regions(self.cram_gs_path, self.crai_gs_path)
 
     def test_samtools_prints_stderr_exception(self):
@@ -208,6 +245,9 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
                 'samtools view: failed to open "nonexistent_cram" for reading: No such file or directory'
             ]:
                 self.assertIn(error_msg, exc, exc)
+
+    def test_read_crai(self):
+        self.assertEqual(len(cram.get_crai_indices(self.crai_local_path)), 5)
 
 if __name__ == '__main__':
     unittest.main()

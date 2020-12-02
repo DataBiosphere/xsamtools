@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import os
 import sys
-import warnings
 import unittest
 import subprocess
 import logging
@@ -12,6 +11,7 @@ from typing import List
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
+from tests.infra import SuppressWarningsMixin  # noqa
 from xsamtools import cram  # noqa
 
 log = logging.getLogger(__name__)
@@ -155,7 +155,6 @@ class TestCram(unittest.TestCase):
         output_contents = p.stdout
         assert input_contents == output_contents
 
-
     def cram_view_with_regions(self, cram_uri, crai_uri, regions):
         cram_output = cram.view(cram=cram_uri, crai=crai_uri, regions=regions, cram_format=True)
         self.clean_up.append(cram_output)
@@ -184,29 +183,29 @@ class TestCram(unittest.TestCase):
         test_regions = 'CHROMOSOME_I,CHROMOSOME_V'
         with self.subTest(f'Test xsamtools view cram with regions: "{test_regions}"'):
             stdout, stderr = self.cram_view_with_regions(cram, crai, regions=test_regions)
-            self.assertEqual(stdout, self.regions['CHROMOSOME_I']['expected_output'] +
-                                     self.regions['CHROMOSOME_V']['expected_output'])
+            self.assertEqual(stdout, (self.regions['CHROMOSOME_I']['expected_output'] +
+                                      self.regions['CHROMOSOME_V']['expected_output']))
 
         test_regions = 'CHROMOSOME_I,CHROMOSOME_III,CHROMOSOME_IV'
         with self.subTest(f'Test xsamtools view cram with regions: "{test_regions}"'):
             stdout, stderr = self.cram_view_with_regions(cram, crai, regions=test_regions)
-            self.assertEqual(stdout, self.regions['CHROMOSOME_I']['expected_output'] +
-                                     self.regions['CHROMOSOME_III']['expected_output'] +
-                                     self.regions['CHROMOSOME_IV']['expected_output'])
+            self.assertEqual(stdout, (self.regions['CHROMOSOME_I']['expected_output'] +
+                                      self.regions['CHROMOSOME_III']['expected_output'] +
+                                      self.regions['CHROMOSOME_IV']['expected_output']))
 
         test_regions = 'CHROMOSOME_I,CHROMOSOME_III:1,CHROMOSOME_IV'
         with self.subTest(f'Test xsamtools view cram with regions: "{test_regions}"'):
             stdout, stderr = self.cram_view_with_regions(cram, crai, regions=test_regions)
-            self.assertEqual(stdout, self.regions['CHROMOSOME_I']['expected_output'] +
-                                     self.regions['CHROMOSOME_III']['expected_output'] +
-                                     self.regions['CHROMOSOME_IV']['expected_output'])
+            self.assertEqual(stdout, (self.regions['CHROMOSOME_I']['expected_output'] +
+                                      self.regions['CHROMOSOME_III']['expected_output'] +
+                                      self.regions['CHROMOSOME_IV']['expected_output']))
 
         test_regions = 'CHROMOSOME_I,CHROMOSOME_III,CHROMOSOME_IV:10-1000'
         with self.subTest(f'Test xsamtools view cram with regions: "{test_regions}"'):
             stdout, stderr = self.cram_view_with_regions(cram, crai, regions=test_regions)
-            self.assertEqual(stdout, self.regions['CHROMOSOME_I']['expected_output'] +
-                                     self.regions['CHROMOSOME_III']['expected_output'] +
-                                     self.regions['CHROMOSOME_IV']['expected_output'])
+            self.assertEqual(stdout, (self.regions['CHROMOSOME_I']['expected_output'] +
+                                      self.regions['CHROMOSOME_III']['expected_output'] +
+                                      self.regions['CHROMOSOME_IV']['expected_output']))
 
     def test_cram_view_cli_with_no_regions(self):
         with self.subTest('[CLI] View cram for local files (no regions).'):

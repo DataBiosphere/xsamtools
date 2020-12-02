@@ -125,6 +125,13 @@ def encode_itf8(value):
         raise ValueError('Number is too large for an unsigned 32-bit integer.')
     return bytes(integers)
 
+def decode_itf8_array(handle, size=None):
+    number_of_items_in_array = decode_itf8(handle) if size is None else size
+    itf8_array = []
+    for _ in range(number_of_items_in_array):
+        itf8_array.append(decode_itf8(handle))
+    return itf8_array
+
 def get_crai_indices(crai):
     crai_indices = []
     with open(crai, "rb") as fh:

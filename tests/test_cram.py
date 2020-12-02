@@ -234,6 +234,21 @@ class TestCram(unittest.TestCase):
     def test_read_crai(self):
         self.assertEqual(len(cram.get_crai_indices(self.crai_local_path)), 5)
 
+    def test_decode_itf8_array(self):
+        number_of_items_in_the_array = b'\x04'
+        # these should be the bytes representations of: [1, 128, 268435456, 2 ** 32 - 1]
+        array_items = b'\x01' + b'\x80\x80' + b'\xf1\x00\x00\x00\x00' + b'\xff\xff\xff\xff\xff'
+
+        with self.subTest('Test decoding an itf8 array where "size" is the first byte.'):
+            itf8_array_input_stream = io.BytesIO(number_of_items_in_the_array + array_items)
+            results = cram.decode_itf8_array(itf8_array_input_stream)
+            self.assertEqual(results, [1, 128, 268435456, 2 ** 32 - 1])
+
+        with self.subTest('Test decoding an itf8 array where "size" is explicitly provided.'):
+            itf8_array_input_stream = io.BytesIO(array_items)
+            results = cram.decode_itf8_array(itf8_array_input_stream, size=4)
+            self.assertEqual(results, [1, 128, 268435456, 2 ** 32 - 1])
+
     def test_encode_decode_itf8(self):
         for n in range(32):
             for adjust_number in (-1, 0, 1):

@@ -31,7 +31,7 @@ def read_fixed_length_cram_file_definition(fh: io.BytesIO):
     -------------------------------------------------------------------------------------------------
     | Data type       Name                   Value                                                  |
     -------------------------------------------------------------------------------------------------
-    | byte[4          format magic number    CRAM (0x43 0x52 0x41 0x4d)                             |
+    | byte[4]         format magic number    CRAM (0x43 0x52 0x41 0x4d)                             |
     | unsigned byte   major format number    3 (0x3)                                                |
     | unsigned byte   minor format number    0 (0x0)                                                |
     | byte[20]        file id                CRAM file identifier (e.g. file name or SHA1 checksum) |

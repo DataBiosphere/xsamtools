@@ -1,4 +1,3 @@
-
 """
 Tools for working with CRAM files.
 CRAM/CRAI spec here:

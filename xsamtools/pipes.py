@@ -12,7 +12,7 @@ from typing import Any, Tuple, Dict, IO, BinaryIO, Optional
 
 import gs_chunked_io as gscio
 from gs_chunked_io import async_collections
-from terra_notebook_utils import gs, drs, WORKSPACE_GOOGLE_PROJECT
+from terra_notebook_utils import gs
 
 from xsamtools import gs_utils
 

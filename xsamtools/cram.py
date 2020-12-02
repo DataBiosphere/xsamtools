@@ -153,6 +153,18 @@ def encode_itf8(num: int) -> bytes:
         raise ValueError('Number is too large for an unsigned 32-bit integer.')
     return bytes(integers)
 
+def decode_itf8_array(handle: io.BytesIO, size: Optional[int] = None):
+    """
+    Decodes an itf8 array from a BytesIO stream.
+
+    The spec either defines the length of the expected array as the first byte of the BytesIO stream...
+    OR it's explicitly in the spec (e.g. Array[4] always has a length of four), so sometimes we need to rely on the
+    specification itself to document the array size and sometimes we can only determine the size from the CRAM file.
+    """
+    if size is None:
+        size = decode_itf8(handle)
+    return [decode_itf8(handle) for _ in range(size)]
+
 def get_crai_indices(crai):
     crai_indices = []
     with open(crai, "rb") as fh:

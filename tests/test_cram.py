@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import sys
+import warnings
 import unittest
 import subprocess
 import logging
@@ -8,14 +9,19 @@ import logging
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
-from tests.infra import SuppressWarningsMixin  # noqa
 from xsamtools import cram  # noqa
 from xsamtools.misc_utils import SubprocessErrorStdError
 
 log = logging.getLogger(__name__)
 
 
-class TestCram(SuppressWarningsMixin, unittest.TestCase):
+class TestCram(unittest.TestCase):
+    def setUp(self):
+        # Suppress the annoying google gcloud _CLOUD_SDK_CREDENTIALS_WARNING warnings
+        warnings.filterwarnings('ignore', 'Your application has authenticated using end user credentials')
+        # Suppress unclosed socket warnings
+        warnings.simplefilter('ignore', ResourceWarning)
+
     @classmethod
     def setUpClass(cls) -> None:
         # TODO: Add blob exists check to xsamtools.gs_utils and conditionally repopulate fixtures if missing

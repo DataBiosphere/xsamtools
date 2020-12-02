@@ -51,6 +51,108 @@ def read_fixed_length_cram_file_definition(fh: io.BytesIO):
         'file_id': fh.read(20).decode('utf-8')
     }
 
+def next_int(fh: io.BytesIO) -> int:
+    return int.from_bytes(fh.read(1), byteorder='little', signed=False)
+
+def decode_itf8(fh: io.BytesIO) -> int:
+    """
+     * Decode int values with CRAM's ITF8 protocol.
+     *
+     * ITF8 encodes ints as 1 to 5 bytes depending on the highest set bit.
+     *
+     * (using 1-based counting)
+     * If highest bit < 8:
+     *      write out [bits 1-8]
+     * Highest bit = 8-14:
+     *      write a byte 1,0,[bits 9-14]
+     *      write out [bits 1-8]
+     * Highest bit = 15-21:
+     *      write a byte 1,1,0,[bits 17-21]
+     *      write out [bits 9-16]
+     *      write out [bits 1-8]
+     * Highest bit = 22-28:
+     *      write a byte 1,1,1,0,[bits 25-28]
+     *      write out [bits 17-24]
+     *      write out [bits 9-16]
+     *      write out [bits 1-8]
+     * Highest bit > 28:
+     *      write a byte 1,1,1,1,[bits 29-32]
+     *      write out [bits 21-28]                      **** note the change in pattern here
+     *      write out [bits 13-20]
+     *      write out [bits 5-12]
+     *      write out [bits 1-8]
+    Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12  # noqa
+    """
+    int1 = next_int(fh)
+
+    if (int1 & 128) == 0:
+        return int1
+
+    elif (int1 & 64) == 0:
+        int2 = next_int(fh)
+        return ((int1 & 127) << 8) | int2
+
+    elif (int1 & 32) == 0:
+        int2 = next_int(fh)
+        int3 = next_int(fh)
+        return ((int1 & 63) << 16) | int2 << 8 | int3
+
+    elif (int1 & 16) == 0:
+        int2 = next_int(fh)
+        int3 = next_int(fh)
+        int4 = next_int(fh)
+        return ((int1 & 31) << 24) | int2 << 16 | int3 << 8 | int4
+
+    else:
+        int2 = next_int(fh)
+        int3 = next_int(fh)
+        int4 = next_int(fh)
+        int5 = next_int(fh)
+        return ((int1 & 15) << 28) | int2 << 20 | int3 << 12 | int4 << 4 | (15 & int5)
+
+def encode_itf8(num: int) -> bytes:
+    """
+     * Encodes int values with CRAM's ITF8 protocol.
+     *
+     * ITF8 encodes ints as 1 to 5 bytes depending on the highest set bit.
+     *
+     * (using 1-based counting)
+     * If highest bit < 8:
+     *      write out [bits 1-8]
+     * Highest bit = 8-14:
+     *      write a byte 1,0,[bits 9-14]
+     *      write out [bits 1-8]
+     * Highest bit = 15-21:
+     *      write a byte 1,1,0,[bits 17-21]
+     *      write out [bits 9-16]
+     *      write out [bits 1-8]
+     * Highest bit = 22-28:
+     *      write a byte 1,1,1,0,[bits 25-28]
+     *      write out [bits 17-24]
+     *      write out [bits 9-16]
+     *      write out [bits 1-8]
+     * Highest bit > 28:
+     *      write a byte 1,1,1,1,[bits 29-32]
+     *      write out [bits 21-28]                      **** note the change in pattern here
+     *      write out [bits 13-20]
+     *      write out [bits 5-12]
+     *      write out [bits 1-8]
+    Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12  # noqa
+    """
+    if num < 2 ** 7:
+        integers = [num]
+    elif num < 2 ** 14:
+        integers = [((num >> 8) | 0x80), (num & 0xFF)]
+    elif num < 2 ** 21:
+        integers = [((num >> 16) | 0xC0), ((num >> 8) & 0xFF), (num & 0xFF)]
+    elif num < 2 ** 28:
+        integers = [((num >> 24) | 0xE0), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
+    elif num < 2 ** 32:
+        integers = [((num >> 28) | 0xF0), ((num >> 20) & 0xFF), ((num >> 12) & 0xFF), ((num >> 4) & 0xFF), (num & 0xFF)]
+    else:
+        raise ValueError('Number is too large for an unsigned 32-bit integer.')
+    return bytes(integers)
+
 def get_crai_indices(crai):
     crai_indices = []
     with open(crai, "rb") as fh:

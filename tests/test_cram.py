@@ -193,6 +193,9 @@ class TestCram(unittest.TestCase):
         with self.subTest('View cram for gs:// files (regions).'):
             self.run_cram_view_api_with_regions(self.cram_gs_path, self.crai_gs_path)
 
+    def test_read_crai(self):
+        self.assertEqual(len(cram.get_crai_indices(self.crai_local_path)), 5)
+
 
 if __name__ == '__main__':
     unittest.main()

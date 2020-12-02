@@ -8,17 +8,29 @@ import os
 import subprocess
 import datetime
 import logging
+import gzip
+import io
 
+from collections import namedtuple
 from tempfile import TemporaryDirectory
 from typing import Optional
 from urllib.request import urlretrieve
-from terra_notebook_utils import xprofile, gs
-
-pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-log = logging.getLogger(__name__)
+from terra_notebook_utils import xprofile
 
 from xsamtools import gs_utils
 
+CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
+log = logging.getLogger(__name__)
+
+
+def get_crai_indices(crai):
+    crai_indices = []
+    with open(crai, "rb") as fh:
+        with gzip.GzipFile(fileobj=fh) as gzip_reader:
+            with io.TextIOWrapper(gzip_reader, encoding='ascii') as reader:
+                for line in reader:
+                    crai_indices.append(CramLocation(*[int(d) for d in line.split("\t")]))
+    return crai_indices
 
 def download_full_gs(gs_path: str, output_filename: str = None) -> str:
     # TODO: use gs_chunked_io instead
@@ -94,10 +106,10 @@ def view(cram: str,
                               f'Only local file outputs are currently supported.'
 
     with TemporaryDirectory() as staging_dir:
-        staged_cram = os.path.join(staging_dir, f'tmp.cram')
+        staged_cram = os.path.join(staging_dir, 'tmp.cram')
         stage(uri=cram, output=staged_cram)
         if crai:
-            staged_crai = os.path.join(staging_dir, f'tmp.crai')
+            staged_crai = os.path.join(staging_dir, 'tmp.crai')
             stage(uri=crai, output=staged_crai)
         else:
             staged_crai = None

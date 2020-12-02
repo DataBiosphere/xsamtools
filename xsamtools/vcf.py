@@ -7,13 +7,12 @@ import subprocess
 from concurrent.futures import ProcessPoolExecutor
 from typing import Union, Sequence
 
-from terra_notebook_utils import xprofile, drs
+from terra_notebook_utils import xprofile
 
 from xsamtools import pipes, vcf, samtools, gs_utils
 
 
 cores_available = cpu_count()
-
 
 def _merge(input_filepaths: Sequence[str], output_filepath: str):
     subprocess.run([samtools.paths['bcftools'],

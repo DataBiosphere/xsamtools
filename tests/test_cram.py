@@ -137,6 +137,12 @@ class TestCram(unittest.TestCase):
         p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         self.clean_up.append(p.stdout)
 
+        # samtools can't handle gs uris
+        if cram_uri == self.cram_gs_path:
+            cram_uri = self.cram_local_path
+        if crai_uri == self.crai_gs_path:
+            crai_uri = self.crai_local_path
+
         # view the INPUT cram as human readable
         cmd = f'samtools view {cram_uri} -X {crai_uri}'
         log.info(f'Now running: {cmd}')
@@ -208,7 +214,7 @@ class TestCram(unittest.TestCase):
             self.cram_cli(self.cram_local_path, self.crai_local_path)
 
         with self.subTest('[CLI] View cram for gs:// files (no regions).'):
-            self.assert_cram_view_with_no_regions_generates_identical_output(self.cram_gs_path, self.crai_gs_path)
+            self.cram_cli(self.cram_gs_path, self.crai_gs_path)
 
     def test_cram_view_api_with_no_regions(self):
         with self.subTest('[API] View cram for local files (no regions).'):

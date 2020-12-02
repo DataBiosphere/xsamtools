@@ -23,10 +23,10 @@ CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span of
 log = logging.getLogger(__name__)
 
 
-def next_int(fh):
+def next_int(fh: io.BytesIO):
     return int.from_bytes(fh.read(1), byteorder='little', signed=False)
 
-def decode_itf8(fh):
+def decode_itf8(fh: io.BytesIO):
     """
      * Decode int values with CRAM's ITF8 protocol.
      *
@@ -82,7 +82,7 @@ def decode_itf8(fh):
         int5 = next_int(fh)
         return ((int1 & 15) << 28) | int2 << 20 | int3 << 12 | int4 << 4 | (15 & int5)
 
-def encode_itf8(value):
+def encode_itf8(integer: int):
     """
      * Encodes int values with CRAM's ITF8 protocol.
      *
@@ -111,16 +111,16 @@ def encode_itf8(value):
      *      write out [bits 1-8]
     Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12
     """
-    if value < 2 ** 7:
-        integers = [value]
-    elif value < 2 ** 14:
-        integers = [((value >> 8) | 0x80), (value & 0xFF)]
-    elif value < 2 ** 21:
-        integers = [((value >> 16) | 0xC0), ((value >> 8) & 0xFF), (value & 0xFF)]
-    elif value < 2 ** 28:
-        integers = [((value >> 24) | 0xE0), ((value >> 16) & 0xFF), ((value >> 8) & 0xFF), (value & 0xFF)]
-    elif value < 2 ** 32:
-        integers = [((value >> 28) | 0xF0), ((value >> 20) & 0xFF), ((value >> 12) & 0xFF), ((value >> 4) & 0xFF), (value & 0xFF)]
+    if integer < 2 ** 7:
+        integers = [integer]
+    elif integer < 2 ** 14:
+        integers = [((integer >> 8) | 0x80), (integer & 0xFF)]
+    elif integer < 2 ** 21:
+        integers = [((integer >> 16) | 0xC0), ((integer >> 8) & 0xFF), (integer & 0xFF)]
+    elif integer < 2 ** 28:
+        integers = [((integer >> 24) | 0xE0), ((integer >> 16) & 0xFF), ((integer >> 8) & 0xFF), (integer & 0xFF)]
+    elif integer < 2 ** 32:
+        integers = [((integer >> 28) | 0xF0), ((integer >> 20) & 0xFF), ((integer >> 12) & 0xFF), ((integer >> 4) & 0xFF), (integer & 0xFF)]
     else:
         raise ValueError('Number is too large for an unsigned 32-bit integer.')
     return bytes(integers)

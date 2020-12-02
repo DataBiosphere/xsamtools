@@ -1,5 +1,6 @@
 """
 Tools for working with CRAM files.
+
 CRAM/CRAI spec here:
 http://samtools.github.io/hts-specs/CRAMv3.pdf
 """

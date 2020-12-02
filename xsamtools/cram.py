@@ -17,12 +17,11 @@ from typing import Optional
 from urllib.request import urlretrieve
 from terra_notebook_utils import xprofile
 
-pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-log = logging.getLogger(__name__)
-
 from xsamtools import gs_utils
 
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
+log = logging.getLogger(__name__)
+
 
 def get_crai_indices(crai):
     crai_indices = []

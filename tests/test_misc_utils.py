@@ -8,7 +8,7 @@ pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noq
 sys.path.insert(0, pkg_root)  # noqa
 
 from tests.infra import SuppressWarningsMixin  # noqa
-from xsamtools.misc_utils import subprocess_w_stderr_run, SubprocessErrorStdError
+from xsamtools.misc_utils import subprocess_w_stderr_run, SubprocessErrorStdError  # noqa
 
 log = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class TestSubprocessStdErr(SuppressWarningsMixin, unittest.TestCase):
             exc = ''
             try:
                 subprocess_w_stderr_run(cmd='this-grand-command-wont-land-as-planned', check=True)
-            except:
+            except SubprocessErrorStdError:
                 import traceback
                 exc = traceback.format_exc()
             self.assertTrue('/bin/sh: 1: this-grand-command-wont-land-as-planned: not found' in exc, exc)

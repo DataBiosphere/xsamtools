@@ -3,7 +3,7 @@ import subprocess
 from typing import Any
 
 
-def subprocess_w_stderr_run(cmd: Any, stdout: int = subprocess.PIPE, check: bool = False, shell: bool = True):
+def subprocess_w_stderr_run(cmd: Any, stdout: Any = subprocess.PIPE, check: bool = False, shell: bool = True):
     """Subprocess.run() that will print stderr if CalledProcessError is raised."""
     # stderr must be subprocess.PIPE in order to print stderr currently
     process = subprocess.run(cmd, shell=shell, stdout=stdout, stderr=subprocess.PIPE)

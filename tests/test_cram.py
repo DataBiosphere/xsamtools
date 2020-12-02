@@ -14,7 +14,7 @@ sys.path.insert(0, pkg_root)  # noqa
 
 from tests.infra import SuppressWarningsMixin  # noqa
 from xsamtools import cram  # noqa
-from xsamtools.misc_utils import SubprocessErrorStdError
+from xsamtools.misc_utils import SubprocessErrorStdError  # noqa
 
 log = logging.getLogger(__name__)
 
@@ -284,7 +284,7 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
             exc = ''
             try:
                 cram.write_final_file_with_samtools('nonexistent_cram', None, None, True, nonexistent_output)
-            except:
+            except SubprocessErrorStdError:
                 import traceback
                 exc = traceback.format_exc()
             for error_msg in [

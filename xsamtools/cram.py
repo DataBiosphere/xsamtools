@@ -110,7 +110,7 @@ def decode_itf8(fh: io.BytesIO) -> int:
         int5 = next_int(fh)
         return ((int1 & 15) << 28) | int2 << 20 | int3 << 12 | int4 << 4 | (15 & int5)
 
-def encode_itf8(integer: int) -> bytes:
+def encode_itf8(num: int) -> bytes:
     """
      * Encodes int values with CRAM's ITF8 protocol.
      *
@@ -139,17 +139,16 @@ def encode_itf8(integer: int) -> bytes:
      *      write out [bits 1-8]
     Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12  # noqa
     """
-    if integer < 2 ** 7:
-        integers = [integer]
-    elif integer < 2 ** 14:
-        integers = [((integer >> 8) | 0x80), (integer & 0xFF)]
-    elif integer < 2 ** 21:
-        integers = [((integer >> 16) | 0xC0), ((integer >> 8) & 0xFF), (integer & 0xFF)]
-    elif integer < 2 ** 28:
-        integers = [((integer >> 24) | 0xE0), ((integer >> 16) & 0xFF), ((integer >> 8) & 0xFF), (integer & 0xFF)]
-    elif integer < 2 ** 32:
-        integers = [((integer >> 28) | 0xF0), ((integer >> 20) & 0xFF), ((integer >> 12) & 0xFF),
-                    ((integer >> 4) & 0xFF), (integer & 0xFF)]
+    if num < 2 ** 7:
+        integers = [num]
+    elif num < 2 ** 14:
+        integers = [((num >> 8) | 0x80), (num & 0xFF)]
+    elif num < 2 ** 21:
+        integers = [((num >> 16) | 0xC0), ((num >> 8) & 0xFF), (num & 0xFF)]
+    elif num < 2 ** 28:
+        integers = [((num >> 24) | 0xE0), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
+    elif num < 2 ** 32:
+        integers = [((num >> 28) | 0xF0), ((num >> 20) & 0xFF), ((num >> 12) & 0xFF), ((num >> 4) & 0xFF), (num & 0xFF)]
     else:
         raise ValueError('Number is too large for an unsigned 32-bit integer.')
     return bytes(integers)

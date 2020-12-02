@@ -22,6 +22,136 @@ from xsamtools import gs_utils
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
 
+def read_fixed_length_cram_file_definition(fh: io.BytesIO):
+    """
+    This definition is always the first 26 bytes of a cram file.
+
+    From CRAM spec 3.0 (22 Jun 2020):
+
+    -------------------------------------------------------------------------------------------------
+    | Data type       Name                   Value                                                  |
+    -------------------------------------------------------------------------------------------------
+    | byte[4]         format magic number    CRAM (0x43 0x52 0x41 0x4d)                             |
+    | unsigned byte   major format number    3 (0x3)                                                |
+    | unsigned byte   minor format number    0 (0x0)                                                |
+    | byte[20]        file id                CRAM file identifier (e.g. file name or SHA1 checksum) |
+    -------------------------------------------------------------------------------------------------
+
+    Valid CRAM major.minor version numbers are as follows:
+        1.0 The original public CRAM release.
+        2.0 The first CRAM release implemented in both Java and C; tidied up implementation vs specification
+        differences in 1.0.
+        2.1 Gained end of file markers; compatible with 2.0.
+        3.0 Additional compression methods; header and data checksums; improvements for unsorted data.
+    """
+    return {
+        'cram': fh.read(4).decode('utf-8'),
+        'major_version': int.from_bytes(fh.read(1), byteorder='little'),  # order shouldn't matter with 1 byte
+        'minor_version': int.from_bytes(fh.read(1), byteorder='little'),  # but it's required
+        'file_id': fh.read(20).decode('utf-8')
+    }
+
+def next_int(fh: io.BytesIO) -> int:
+    return int.from_bytes(fh.read(1), byteorder='little', signed=False)
+
+def decode_itf8(fh: io.BytesIO) -> int:
+    """
+     * Decode int values with CRAM's ITF8 protocol.
+     *
+     * ITF8 encodes ints as 1 to 5 bytes depending on the highest set bit.
+     *
+     * (using 1-based counting)
+     * If highest bit < 8:
+     *      write out [bits 1-8]
+     * Highest bit = 8-14:
+     *      write a byte 1,0,[bits 9-14]
+     *      write out [bits 1-8]
+     * Highest bit = 15-21:
+     *      write a byte 1,1,0,[bits 17-21]
+     *      write out [bits 9-16]
+     *      write out [bits 1-8]
+     * Highest bit = 22-28:
+     *      write a byte 1,1,1,0,[bits 25-28]
+     *      write out [bits 17-24]
+     *      write out [bits 9-16]
+     *      write out [bits 1-8]
+     * Highest bit > 28:
+     *      write a byte 1,1,1,1,[bits 29-32]
+     *      write out [bits 21-28]                      **** note the change in pattern here
+     *      write out [bits 13-20]
+     *      write out [bits 5-12]
+     *      write out [bits 1-8]
+    Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12  # noqa
+    """
+    int1 = next_int(fh)
+
+    if (int1 & 128) == 0:
+        return int1
+
+    elif (int1 & 64) == 0:
+        int2 = next_int(fh)
+        return ((int1 & 127) << 8) | int2
+
+    elif (int1 & 32) == 0:
+        int2 = next_int(fh)
+        int3 = next_int(fh)
+        return ((int1 & 63) << 16) | int2 << 8 | int3
+
+    elif (int1 & 16) == 0:
+        int2 = next_int(fh)
+        int3 = next_int(fh)
+        int4 = next_int(fh)
+        return ((int1 & 31) << 24) | int2 << 16 | int3 << 8 | int4
+
+    else:
+        int2 = next_int(fh)
+        int3 = next_int(fh)
+        int4 = next_int(fh)
+        int5 = next_int(fh)
+        return ((int1 & 15) << 28) | int2 << 20 | int3 << 12 | int4 << 4 | (15 & int5)
+
+def encode_itf8(num: int) -> bytes:
+    """
+     * Encodes int values with CRAM's ITF8 protocol.
+     *
+     * ITF8 encodes ints as 1 to 5 bytes depending on the highest set bit.
+     *
+     * (using 1-based counting)
+     * If highest bit < 8:
+     *      write out [bits 1-8]
+     * Highest bit = 8-14:
+     *      write a byte 1,0,[bits 9-14]
+     *      write out [bits 1-8]
+     * Highest bit = 15-21:
+     *      write a byte 1,1,0,[bits 17-21]
+     *      write out [bits 9-16]
+     *      write out [bits 1-8]
+     * Highest bit = 22-28:
+     *      write a byte 1,1,1,0,[bits 25-28]
+     *      write out [bits 17-24]
+     *      write out [bits 9-16]
+     *      write out [bits 1-8]
+     * Highest bit > 28:
+     *      write a byte 1,1,1,1,[bits 29-32]
+     *      write out [bits 21-28]                      **** note the change in pattern here
+     *      write out [bits 13-20]
+     *      write out [bits 5-12]
+     *      write out [bits 1-8]
+    Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12  # noqa
+    """
+    if num < 2 ** 7:
+        integers = [num]
+    elif num < 2 ** 14:
+        integers = [((num >> 8) | 0x80), (num & 0xFF)]
+    elif num < 2 ** 21:
+        integers = [((num >> 16) | 0xC0), ((num >> 8) & 0xFF), (num & 0xFF)]
+    elif num < 2 ** 28:
+        integers = [((num >> 24) | 0xE0), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
+    elif num < 2 ** 32:
+        integers = [((num >> 28) | 0xF0), ((num >> 20) & 0xFF), ((num >> 12) & 0xFF), ((num >> 4) & 0xFF), (num & 0xFF)]
+    else:
+        raise ValueError('Number is too large for an unsigned 32-bit integer.')
+    return bytes(integers)
 
 def next_int(fh):
     return int.from_bytes(fh.read(1), byteorder='little', signed=False)

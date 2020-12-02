@@ -2,103 +2,96 @@
 import io
 import os
 import sys
-import warnings
 import unittest
 import subprocess
 import logging
 
 from uuid import uuid4
+from typing import List
 
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
+from tests.infra import SuppressWarningsMixin  # noqa
 from xsamtools import cram  # noqa
 
 log = logging.getLogger(__name__)
 
 
-class TestCram(unittest.TestCase):
-    def setUp(self):
-        # Suppress the annoying google gcloud _CLOUD_SDK_CREDENTIALS_WARNING warnings
-        warnings.filterwarnings('ignore', 'Your application has authenticated using end user credentials')
-        # Suppress unclosed socket warnings
-        warnings.simplefilter('ignore', ResourceWarning)
-
-    @classmethod
-    def setUpClass(cls) -> None:
-        # TODO: Add blob exists check to xsamtools.gs_utils and conditionally repopulate fixtures if missing
-        cls.clean_up = []
-        cls.cram_gs_path = 'gs://lons-test/ce#5b.cram'
-        cls.cram_local_path = os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram')
-        cls.crai_gs_path = 'gs://lons-test/ce#5b.cram.crai'
-        cls.crai_local_path = os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram.crai')
-        # basically the entire contents of ce#5b.cram
-        cls.regions = {
-            'CHROMOSOME_I': {
-                'expected_output':
-                    b'I\t16\tCHROMOSOME_I\t2\t1\t27M1D73M\t*\t0\t0\tCCTAGCCCTAACCCTAACCCTAAC'
-                    b'CCTAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAA'
-                    b'GCCTAA\t#############################@B?8B?BA@@DDBCDDCBC@CDCDCCCCCCCCC'
-                    b'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\tXG:i:1\tXM:i:5\tXN:i:0\tXO:i:1'
-                    b'\tXS:i:-18\tAS:i:-18\tYT:Z:UU\tMD:Z:4A0G5G5G5G3^A73\tNM:i:6\n'
-            },
-            'CHROMOSOME_II': {
-                'expected_output':
-                    b'II.14978392\t16\tCHROMOSOME_II\t2\t1\t27M1D73M\t*\t0\t0\tCCTAGCCCTAACC'
-                    b'CTAACCCTAACCCTAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAG'
-                    b'CCTAAGCCTAAGCCTAA\t#############################@B?8B?BA@@DDBCDDCBC@CD'
-                    b'CDCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\tXG:i:1\tXM:i:5\tXN:'
-                    b'i:0\tXO:i:1\tXS:i:-18\tAS:i:-18\tYT:Z:UU\tMD:Z:1T0A4T0A1G2T0A1G2T0A1G2'
-                    b'T0A0^A0G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A'
-                    b'1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0\tNM:i:63\n'
-            },
-            'CHROMOSOME_III': {
-                'expected_output':
-                    b'III\t16\tCHROMOSOME_III\t2\t1\t27M1D73M\t*\t0\t0\tCCTAGCCCTAACCCTAACCC'
-                    b'TAACCCTAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGC'
-                    b'CTAAGCCTAA\t#############################@B?8B?BA@@DDBCDDCBC@CDCDCCCCC'
-                    b'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\tXG:i:1\tXM:i:5\tXN:i:0\tXO'
-                    b':i:1\tXS:i:-18\tAS:i:-18\tYT:Z:UU\tMD:Z:1T0A4T0A1G2T0A1G2T0A1G2T0A0^A0'
-                    b'G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0'
-                    b'A1G0C1T0A1G0C1T0A1G0C1T0A1G0\tNM:i:63\n'
-            },
-            'CHROMOSOME_IV': {
-                'expected_output':
-                    b'IV\t16\tCHROMOSOME_IV\t2\t1\t27M1D73M\t*\t0\t0\tCCTAGCCCTAACCCTAACCCTA'
-                    b'ACCCTAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCT'
-                    b'AAGCCTAA\t#############################@B?8B?BA@@DDBCDDCBC@CDCDCCCCCCC'
-                    b'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\tXG:i:1\tXM:i:5\tXN:i:0\tXO:i'
-                    b':1\tXS:i:-18\tAS:i:-18\tYT:Z:UU\tMD:Z:1T0A4T0A1G2T0A1G2T0A1G2T0A0^A0G0'
-                    b'C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1'
-                    b'G0C1T0A1G0C1T0A1G0C1T0A1G0\tNM:i:63\n'
-            },
-            'CHROMOSOME_V': {
-                'expected_output':
-                    b'V\t16\tCHROMOSOME_V\t2\t1\t27M1D73M\t*\t0\t0\tCCTAGCCCTAACCCTAACCCTAAC'
-                    b'CCTAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAA'
-                    b'GCCTAA\t#############################@B?8B?BA@@DDBCDDCBC@CDCDCCCCCCCCC'
-                    b'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\tXG:i:1\tXM:i:5\tXN:i:0\tXO:i:1'
-                    b'\tXS:i:-18\tAS:i:-18\tYT:Z:UU\tMD:Z:0A0A1T0C1T0A0A0G0C1T0A0A0G0C1T0A0A'
-                    b'0G0C1T0A0A0^G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0A0'
-                    b'A0G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0'
-                    b'A0A0G0C0C0T0A0A0G0C0\tNM:i:96\n'
-                    b''
-                    b'VI\t0\tCHROMOSOME_V\t10\t1\t7S20M1D23M10I30M10S\t*\t0\t0\tAGCCTAAGCCTA'
-                    b'AGCCTAAGCCTAAGCTAAGCCTAAGCCTAAGCCTAAGCTTTTTTTTTTCTAAGCCTAAGCCTAAGCCTAA'
-                    b'GCCTAAGCCTAAGCCTAA\t*\tMD:Z:0A0G1C0T1A0G1C0T1A0G1C0T1A0G0^C0C0T1A0G1C0'
-                    b'T1A0G1C0T1A0G1C0T1A0G1C0T1A0G1C0T1A0G1C0T1A0G1C0T1A0G1C0T1A0G0\tNM:i:6'
-                    b'1\n'
-                    b''
-                    b'VI\t256\tCHROMOSOME_V\t10\t1\t7S20M1D23M10I30M10S\t*\t0\t0\tNNNNNNNAGC'
-                    b'CTAAGCCTAAGCCTAAGCTAAGCCTAAGCCTAAGCCTAAGNNNNNNNNNNCCTAAGCCTAAGCCTAAGCC'
-                    b'TAAGCCTAAGNNNNNNNNNN\t*\tMD:Z:20^C53\tNM:i:11\n'
-            },
-            # this one doesn't exist in the file
-            'CHROMOSOME_VI': {
-                'expected_output':
-                    b''
-            },
-        }
+class TestCram(SuppressWarningsMixin, unittest.TestCase):
+    # TODO: Add blob exists check to xsamtools.gs_utils and conditionally repopulate fixtures if missing
+    clean_up: List[str] = []
+    cram_gs_path = 'gs://lons-test/ce#5b.cram'
+    cram_local_path = os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram')
+    crai_gs_path = 'gs://lons-test/ce#5b.cram.crai'
+    crai_local_path = os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram.crai')
+    # basically the entire contents of ce#5b.cram
+    regions = {
+        'CHROMOSOME_I': {
+            'expected_output':
+                b'I\t16\tCHROMOSOME_I\t2\t1\t27M1D73M\t*\t0\t0\tCCTAGCCCTAACCCTAACCCTAAC'
+                b'CCTAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAA'
+                b'GCCTAA\t#############################@B?8B?BA@@DDBCDDCBC@CDCDCCCCCCCCC'
+                b'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\tXG:i:1\tXM:i:5\tXN:i:0\tXO:i:1'
+                b'\tXS:i:-18\tAS:i:-18\tYT:Z:UU\tMD:Z:4A0G5G5G5G3^A73\tNM:i:6\n'
+        },
+        'CHROMOSOME_II': {
+            'expected_output':
+                b'II.14978392\t16\tCHROMOSOME_II\t2\t1\t27M1D73M\t*\t0\t0\tCCTAGCCCTAACC'
+                b'CTAACCCTAACCCTAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAG'
+                b'CCTAAGCCTAAGCCTAA\t#############################@B?8B?BA@@DDBCDDCBC@CD'
+                b'CDCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\tXG:i:1\tXM:i:5\tXN:'
+                b'i:0\tXO:i:1\tXS:i:-18\tAS:i:-18\tYT:Z:UU\tMD:Z:1T0A4T0A1G2T0A1G2T0A1G2'
+                b'T0A0^A0G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A'
+                b'1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0\tNM:i:63\n'
+        },
+        'CHROMOSOME_III': {
+            'expected_output':
+                b'III\t16\tCHROMOSOME_III\t2\t1\t27M1D73M\t*\t0\t0\tCCTAGCCCTAACCCTAACCC'
+                b'TAACCCTAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGC'
+                b'CTAAGCCTAA\t#############################@B?8B?BA@@DDBCDDCBC@CDCDCCCCC'
+                b'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\tXG:i:1\tXM:i:5\tXN:i:0\tXO'
+                b':i:1\tXS:i:-18\tAS:i:-18\tYT:Z:UU\tMD:Z:1T0A4T0A1G2T0A1G2T0A1G2T0A0^A0'
+                b'G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0'
+                b'A1G0C1T0A1G0C1T0A1G0C1T0A1G0\tNM:i:63\n'
+        },
+        'CHROMOSOME_IV': {
+            'expected_output':
+                b'IV\t16\tCHROMOSOME_IV\t2\t1\t27M1D73M\t*\t0\t0\tCCTAGCCCTAACCCTAACCCTA'
+                b'ACCCTAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCT'
+                b'AAGCCTAA\t#############################@B?8B?BA@@DDBCDDCBC@CDCDCCCCCCC'
+                b'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\tXG:i:1\tXM:i:5\tXN:i:0\tXO:i'
+                b':1\tXS:i:-18\tAS:i:-18\tYT:Z:UU\tMD:Z:1T0A4T0A1G2T0A1G2T0A1G2T0A0^A0G0'
+                b'C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1G0C1T0A1'
+                b'G0C1T0A1G0C1T0A1G0C1T0A1G0\tNM:i:63\n'
+        },
+        'CHROMOSOME_V': {
+            'expected_output':
+                b'V\t16\tCHROMOSOME_V\t2\t1\t27M1D73M\t*\t0\t0\tCCTAGCCCTAACCCTAACCCTAAC'
+                b'CCTAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAAGCCTAA'
+                b'GCCTAA\t#############################@B?8B?BA@@DDBCDDCBC@CDCDCCCCCCCCC'
+                b'CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC\tXG:i:1\tXM:i:5\tXN:i:0\tXO:i:1'
+                b'\tXS:i:-18\tAS:i:-18\tYT:Z:UU\tMD:Z:0A0A1T0C1T0A0A0G0C1T0A0A0G0C1T0A0A'
+                b'0G0C1T0A0A0^G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0A0'
+                b'A0G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0A0A0G0C0C0T0'
+                b'A0A0G0C0C0T0A0A0G0C0\tNM:i:96\n'
+                b''
+                b'VI\t0\tCHROMOSOME_V\t10\t1\t7S20M1D23M10I30M10S\t*\t0\t0\tAGCCTAAGCCTA'
+                b'AGCCTAAGCCTAAGCTAAGCCTAAGCCTAAGCCTAAGCTTTTTTTTTTCTAAGCCTAAGCCTAAGCCTAA'
+                b'GCCTAAGCCTAAGCCTAA\t*\tMD:Z:0A0G1C0T1A0G1C0T1A0G1C0T1A0G0^C0C0T1A0G1C0'
+                b'T1A0G1C0T1A0G1C0T1A0G1C0T1A0G1C0T1A0G1C0T1A0G1C0T1A0G1C0T1A0G0\tNM:i:6'
+                b'1\n'
+                b''
+                b'VI\t256\tCHROMOSOME_V\t10\t1\t7S20M1D23M10I30M10S\t*\t0\t0\tNNNNNNNAGC'
+                b'CTAAGCCTAAGCCTAAGCTAAGCCTAAGCCTAAGCCTAAGNNNNNNNNNNCCTAAGCCTAAGCCTAAGCC'
+                b'TAAGCCTAAGNNNNNNNNNN\t*\tMD:Z:20^C53\tNM:i:11\n'
+        },
+        # this one doesn't exist in the file
+        'CHROMOSOME_VI': {
+            'expected_output':
+                b''
+        },
+    }
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -157,7 +150,6 @@ class TestCram(unittest.TestCase):
         output_contents = p.stdout
         assert input_contents == output_contents
 
-
     def cram_view_with_regions(self, cram_uri, crai_uri, regions):
         cram_output = cram.view(cram=cram_uri, crai=crai_uri, regions=regions, cram_format=True)
         self.clean_up.append(cram_output)
@@ -186,29 +178,29 @@ class TestCram(unittest.TestCase):
         test_regions = 'CHROMOSOME_I,CHROMOSOME_V'
         with self.subTest(f'Test xsamtools view cram with regions: "{test_regions}"'):
             stdout, stderr = self.cram_view_with_regions(cram, crai, regions=test_regions)
-            self.assertEqual(stdout, self.regions['CHROMOSOME_I']['expected_output'] +
-                                     self.regions['CHROMOSOME_V']['expected_output'])
+            self.assertEqual(stdout, (self.regions['CHROMOSOME_I']['expected_output'] +
+                                      self.regions['CHROMOSOME_V']['expected_output']))
 
         test_regions = 'CHROMOSOME_I,CHROMOSOME_III,CHROMOSOME_IV'
         with self.subTest(f'Test xsamtools view cram with regions: "{test_regions}"'):
             stdout, stderr = self.cram_view_with_regions(cram, crai, regions=test_regions)
-            self.assertEqual(stdout, self.regions['CHROMOSOME_I']['expected_output'] +
-                                     self.regions['CHROMOSOME_III']['expected_output'] +
-                                     self.regions['CHROMOSOME_IV']['expected_output'])
+            self.assertEqual(stdout, (self.regions['CHROMOSOME_I']['expected_output'] +
+                                      self.regions['CHROMOSOME_III']['expected_output'] +
+                                      self.regions['CHROMOSOME_IV']['expected_output']))
 
         test_regions = 'CHROMOSOME_I,CHROMOSOME_III:1,CHROMOSOME_IV'
         with self.subTest(f'Test xsamtools view cram with regions: "{test_regions}"'):
             stdout, stderr = self.cram_view_with_regions(cram, crai, regions=test_regions)
-            self.assertEqual(stdout, self.regions['CHROMOSOME_I']['expected_output'] +
-                                     self.regions['CHROMOSOME_III']['expected_output'] +
-                                     self.regions['CHROMOSOME_IV']['expected_output'])
+            self.assertEqual(stdout, (self.regions['CHROMOSOME_I']['expected_output'] +
+                                      self.regions['CHROMOSOME_III']['expected_output'] +
+                                      self.regions['CHROMOSOME_IV']['expected_output']))
 
         test_regions = 'CHROMOSOME_I,CHROMOSOME_III,CHROMOSOME_IV:10-1000'
         with self.subTest(f'Test xsamtools view cram with regions: "{test_regions}"'):
             stdout, stderr = self.cram_view_with_regions(cram, crai, regions=test_regions)
-            self.assertEqual(stdout, self.regions['CHROMOSOME_I']['expected_output'] +
-                                     self.regions['CHROMOSOME_III']['expected_output'] +
-                                     self.regions['CHROMOSOME_IV']['expected_output'])
+            self.assertEqual(stdout, (self.regions['CHROMOSOME_I']['expected_output'] +
+                                      self.regions['CHROMOSOME_III']['expected_output'] +
+                                      self.regions['CHROMOSOME_IV']['expected_output']))
 
     def test_cram_view_cli_with_no_regions(self):
         with self.subTest('[CLI] View cram for local files (no regions).'):
@@ -285,6 +277,14 @@ class TestCram(unittest.TestCase):
         num_as_bytes = cram.encode_itf8(2 ** 32 - 1)  # this should be the highest 32-bit unsigned int allowed
         self.assertEqual(num_as_bytes, b'\xff\xff\xff\xff\xff')
 
+    def test_read_cram_file_definition(self):
+        expected = {'cram': 'CRAM',
+                    'major_version': 2,
+                    'minor_version': 0,
+                    'file_id': '-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'}
+        with open(self.cram_local_path, 'rb') as f:
+            cram_file_definition = cram.read_fixed_length_cram_file_definition(f)
+        self.assertEqual(cram_file_definition, expected, f'{cram_file_definition} is not: {expected}')
 
 if __name__ == '__main__':
     unittest.main()

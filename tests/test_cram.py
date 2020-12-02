@@ -189,15 +189,17 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
             self.run_cram_view_api_with_regions(self.cram_gs_path, self.crai_gs_path)
 
     def test_samtools_prints_stderr_exception(self):
+        nonexistent_output = 'nonexistent_output'
+        self.clean_up.append(nonexistent_output)
         with self.subTest('Assert cram.write_final_file_with_samtools() raises SubprocessErrorStdError.'):
             with self.assertRaises(SubprocessErrorStdError) as e:
-                cram.write_final_file_with_samtools('nonexistent_cram', None, None, True, 'nonexistent_output')
+                cram.write_final_file_with_samtools('nonexistent_cram', None, None, True, nonexistent_output)
             self.assertEqual(e.exception.returncode, 1)
 
         with self.subTest('Assert cram.write_final_file_with_samtools() prints useful stderr.'):
             exc = ''
             try:
-                cram.write_final_file_with_samtools('nonexistent_cram', None, None, True, 'nonexistent_output')
+                cram.write_final_file_with_samtools('nonexistent_cram', None, None, True, nonexistent_output)
             except:
                 import traceback
                 exc = traceback.format_exc()

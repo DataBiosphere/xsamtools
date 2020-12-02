@@ -6,6 +6,8 @@ import unittest
 import subprocess
 import logging
 
+from uuid import uuid4
+
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
@@ -128,27 +130,23 @@ class TestCram(unittest.TestCase):
         # This check allows us to change samtools versions without significant changes to the test.
 
     def cram_cli(self, cram_uri, crai_uri):
-        cmd = f'xsamtools view --cram {cram_uri} --crai {crai_uri}'
+        output_file = str(uuid4())
+        self.clean_up.append(output_file)
+        cmd = f'xsamtools cram view --cram {cram_uri} --crai {crai_uri} -C --output {output_file}'
         log.info(f'Now running: {cmd}')
-        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if p.returncode:
-            raise cram.SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
+        p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         self.clean_up.append(p.stdout)
 
         # view the INPUT cram as human readable
         cmd = f'samtools view {cram_uri} -X {crai_uri}'
         log.info(f'Now running: {cmd}')
-        p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if p.returncode:
-            raise cram.SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
+        p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         input_contents = p.stdout
 
         # view the OUTPUT cram as human readable
-        cmd = f'samtools view {p.stdout} -X {crai_uri}'
+        cmd = f'samtools view {output_file} -X {crai_uri}'
         log.info(f'Now running: {cmd}')
-        p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if p.returncode:
-            raise cram.SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
+        p = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         output_contents = p.stdout
         assert input_contents == output_contents
 

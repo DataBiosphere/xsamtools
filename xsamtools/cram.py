@@ -51,10 +51,10 @@ def read_fixed_length_cram_file_definition(fh: io.BytesIO):
         'file_id': fh.read(20).decode('utf-8')
     }
 
-def next_int(fh: io.BytesIO):
+def next_int(fh: io.BytesIO) -> int:
     return int.from_bytes(fh.read(1), byteorder='little', signed=False)
 
-def decode_itf8(fh: io.BytesIO):
+def decode_itf8(fh: io.BytesIO) -> int:
     """
      * Decode int values with CRAM's ITF8 protocol.
      *
@@ -81,7 +81,7 @@ def decode_itf8(fh: io.BytesIO):
      *      write out [bits 13-20]
      *      write out [bits 5-12]
      *      write out [bits 1-8]
-    Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12
+    Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12  # noqa
     """
     int1 = next_int(fh)
 
@@ -110,7 +110,7 @@ def decode_itf8(fh: io.BytesIO):
         int5 = next_int(fh)
         return ((int1 & 15) << 28) | int2 << 20 | int3 << 12 | int4 << 4 | (15 & int5)
 
-def encode_itf8(integer: int):
+def encode_itf8(integer: int) -> bytes:
     """
      * Encodes int values with CRAM's ITF8 protocol.
      *
@@ -137,7 +137,7 @@ def encode_itf8(integer: int):
      *      write out [bits 13-20]
      *      write out [bits 5-12]
      *      write out [bits 1-8]
-    Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12
+    Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12  # noqa
     """
     if integer < 2 ** 7:
         integers = [integer]
@@ -148,7 +148,8 @@ def encode_itf8(integer: int):
     elif integer < 2 ** 28:
         integers = [((integer >> 24) | 0xE0), ((integer >> 16) & 0xFF), ((integer >> 8) & 0xFF), (integer & 0xFF)]
     elif integer < 2 ** 32:
-        integers = [((integer >> 28) | 0xF0), ((integer >> 20) & 0xFF), ((integer >> 12) & 0xFF), ((integer >> 4) & 0xFF), (integer & 0xFF)]
+        integers = [((integer >> 28) | 0xF0), ((integer >> 20) & 0xFF), ((integer >> 12) & 0xFF),
+                    ((integer >> 4) & 0xFF), (integer & 0xFF)]
     else:
         raise ValueError('Number is too large for an unsigned 32-bit integer.')
     return bytes(integers)

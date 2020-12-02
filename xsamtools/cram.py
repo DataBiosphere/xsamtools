@@ -22,7 +22,7 @@ from xsamtools import gs_utils
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
 
-def read_fixed_length_cram_file_definition(fh: io.BinaryIO):
+def read_fixed_length_cram_file_definition(fh: io.BytesIO):
     """
     This definition is always the first 26 bytes of a cram file.
 

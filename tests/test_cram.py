@@ -17,13 +17,7 @@ from xsamtools import cram  # noqa
 log = logging.getLogger(__name__)
 
 
-class TestCram(unittest.TestCase):
-    def setUp(self):
-        # Suppress the annoying google gcloud _CLOUD_SDK_CREDENTIALS_WARNING warnings
-        warnings.filterwarnings('ignore', 'Your application has authenticated using end user credentials')
-        # Suppress unclosed socket warnings
-        warnings.simplefilter('ignore', ResourceWarning)
-
+class TestCram(SuppressWarningsMixin, unittest.TestCase):
     # TODO: Add blob exists check to xsamtools.gs_utils and conditionally repopulate fixtures if missing
     clean_up: List[str] = []
     cram_gs_path = 'gs://lons-test/ce#5b.cram'

@@ -119,7 +119,7 @@ class FIFOPipeProcess(AbstractContextManager):
             self._closed = True
             if self._handle is not None:
                 self._handle.close()
-            for f in as_completed([self.future], timeout=300):
+            for _ in as_completed([self.future], timeout=300):
                 pass
             os.unlink(self.filepath)
             self.future.result()

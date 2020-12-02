@@ -5,43 +5,20 @@ CRAM/CRAI spec here:
 http://samtools.github.io/hts-specs/CRAMv3.pdf
 """
 import os
-import subprocess
 import datetime
 import logging
-import signal
 
 from tempfile import TemporaryDirectory
 from typing import Optional
 from urllib.request import urlretrieve
-from terra_notebook_utils import xprofile, gs
+from terra_notebook_utils import xprofile
 
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 log = logging.getLogger(__name__)
 
 from xsamtools import gs_utils
+from xsamtools.misc_utils import subprocess_w_stderr_run
 
-
-class SubprocessErrorIncludeErrorMessages(subprocess.CalledProcessError):
-    """
-    CalledProcessError that also prints stderr/stdout.
-
-    EXAMPLE:
-        Traceback (most recent call last):
-          File "/home/quokka/git/xsamtools/scrap.py", line 37, in <module>
-            raise SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
-        __main__.SubprocessErrorIncludeErrorMessages: Command 'samtools view -C /home/ubuntu/xsamtools/test-cram-slicing/NWD938777.b38.irc.v1.cram -X /home/ubuntu/xsamtools/test-cram-slicing/NWD938777.b38.irc.v1.cram.crai chr1 > /home/ubuntu/xsamtools/2020-11-17-062709.output.cram' returned non-zero exit status 2.
-
-        ERROR: b'/bin/sh: 1: cannot create /home/ubuntu/xsamtools/2020-11-17-062709.output.cram: Directory nonexistent\n'
-    """
-    def __str__(self):
-        if self.returncode and self.returncode < 0:
-            try:
-                msg = f"Command '{self.cmd}' died with {signal.Signals(-self.returncode)}."
-            except ValueError:
-                msg = f"Command '{self.cmd}' died with unknown signal {-self.returncode}."
-        else:
-            msg = f"Command '{self.cmd}' returned non-zero exit status {self.returncode}."
-        return f"{msg}\n\nERROR: {self.stderr}"
 
 def download_full_gs(gs_path: str, output_filename: str = None) -> str:
     # TODO: use gs_chunked_io instead
@@ -77,9 +54,7 @@ def write_final_file_with_samtools(cram: str,
     cmd = f'samtools view {cram_format_arg} {cram} {crai_arg} {region_args}'
 
     log.info(f'Now running: {cmd}')
-    p = subprocess.run(cmd, shell=True, stdout=open(output, 'w'), stderr=subprocess.PIPE)
-    if p.returncode:
-        raise SubprocessErrorIncludeErrorMessages(p.returncode, cmd, p.stdout, p.stderr)
+    subprocess_w_stderr_run(cmd, stdout=open(output, 'w'), check=True)
     log.debug(f'Output CRAM successfully generated at: {output}')
 
 def stage(uri: str, output: str) -> None:

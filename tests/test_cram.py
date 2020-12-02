@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import contextlib
+import io
 import os
 import sys
 import warnings
@@ -10,6 +12,7 @@ pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noq
 sys.path.insert(0, pkg_root)  # noqa
 
 from xsamtools import cram  # noqa
+from xsamtools.misc_utils import SubprocessErrorStdError
 
 log = logging.getLogger(__name__)
 
@@ -192,6 +195,17 @@ class TestCram(unittest.TestCase):
 
         with self.subTest('View cram for gs:// files (regions).'):
             self.run_cram_view_api_with_regions(self.cram_gs_path, self.crai_gs_path)
+
+    def test_samtools_prints_stderr_exception(self):
+        stderr = io.StringIO()
+        with self.assertRaises(SubprocessErrorStdError) as e, contextlib.redirect_stderr(stderr):
+            cram.write_final_file_with_samtools('nonexistent_cram', None, None, True, 'nonexistent_output')
+            print(stderr.getvalue())
+        print(stderr.getvalue())
+        self.assertEqual(e.exception.returncode, 1)
+        for error_msg in ['[E::hts_open_format] Failed to open file "nonexistent_cram" : No such file or directory',
+                          'samtools view: failed to open "nonexistent_cram" for reading: No such file or directory']:
+            self.assertIn(error_msg, stderr.getvalue(), stderr.getvalue())
 
 
 if __name__ == '__main__':

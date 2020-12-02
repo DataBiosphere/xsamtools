@@ -22,7 +22,28 @@ from xsamtools import gs_utils
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
 
-def file_definition(fh):
+def read_fixed_length_cram_file_definition(fh: io.BinaryIO):
+    """
+    This definition is always the first 26 bytes of a cram file.
+
+    From CRAM spec 3.0 (22 Jun 2020):
+
+    -------------------------------------------------------------------------------------------------
+    | Data type       Name                   Value                                                  |
+    -------------------------------------------------------------------------------------------------
+    | byte[4          format magic number    CRAM (0x43 0x52 0x41 0x4d)                             |
+    | unsigned byte   major format number    3 (0x3)                                                |
+    | unsigned byte   minor format number    0 (0x0)                                                |
+    | byte[20]        file id                CRAM file identifier (e.g. file name or SHA1 checksum) |
+    -------------------------------------------------------------------------------------------------
+
+    Valid CRAM major.minor version numbers are as follows:
+        1.0 The original public CRAM release.
+        2.0 The first CRAM release implemented in both Java and C; tidied up implementation vs specification
+        differences in 1.0.
+        2.1 Gained end of file markers; compatible with 2.0.
+        3.0 Additional compression methods; header and data checksums; improvements for unsorted data.
+    """
     return {
         'cram': fh.read(4).decode('utf-8'),
         'major_version': int.from_bytes(fh.read(1), byteorder='little'),  # order shouldn't matter with 1 byte

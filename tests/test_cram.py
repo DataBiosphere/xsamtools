@@ -239,7 +239,7 @@ class TestCram(unittest.TestCase):
                     'minor_version': 0,
                     'file_id': '-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'}
         with open(self.cram_local_path, 'rb') as f:
-            cram_file_definition = cram.file_definition(f)
+            cram_file_definition = cram.read_fixed_length_cram_file_definition(f)
         self.assertEqual(cram_file_definition, expected, f'{cram_file_definition} is not: {expected}')
 
 if __name__ == '__main__':

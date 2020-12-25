@@ -51,7 +51,11 @@ def read_fixed_length_cram_file_definition(fh: io.BytesIO):
         'file_id': fh.read(20).decode('utf-8')
     }
 
+def int32(fh: io.BytesIO) -> int:
+    return int.from_bytes(fh.read(4), byteorder='little', signed=True)
+
 def next_int(fh: io.BytesIO) -> int:
+    # just a reminder that byte order doesn't matter here, as it's only one byte
     return int.from_bytes(fh.read(1), byteorder='little', signed=False)
 
 def decode_itf8(fh: io.BytesIO) -> int:

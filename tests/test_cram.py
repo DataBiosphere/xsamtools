@@ -317,12 +317,6 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
     def test_read_cram_file(self):
         self.read_v2_cram_files()
         self.read_v3_cram_files()
-        with open(self.cram_v3_local_path, 'rb') as f3:
-            with open(self.cram_local_path, 'rb') as f:
-                cram.read_fixed_length_cram_file_definition(f)
-                cram.read_fixed_length_cram_file_definition(f3)
-                for i in range(100):
-                    print(f'{f.read(1)} {f3.read(1)}')
 
     def read_v2_cram_files(self):
         with open(self.cram_local_path, 'rb') as f:

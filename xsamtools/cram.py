@@ -88,7 +88,7 @@ def read_cram_container_header(fh: io.BytesIO):
     :return:
     """
     return {
-        "length": np.frombuffer(fh.read(np.dtype(np.int32).itemsize), np.dtype(np.int32))[0],
+        "length": int32(fh),
         "reference_sequence_id": decode_itf8(fh),
         "starting_position": decode_itf8(fh),
         "alignment_span": decode_itf8(fh),

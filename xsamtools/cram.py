@@ -10,7 +10,6 @@ import datetime
 import logging
 import gzip
 import io
-import numpy as np
 
 from collections import namedtuple
 from tempfile import TemporaryDirectory

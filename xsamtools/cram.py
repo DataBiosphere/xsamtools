@@ -13,7 +13,7 @@ import io
 
 from collections import namedtuple
 from tempfile import TemporaryDirectory
-from typing import Optional
+from typing import Optional, Dict, Any
 from urllib.request import urlretrieve
 from terra_notebook_utils import xprofile
 
@@ -51,7 +51,7 @@ def read_fixed_length_cram_file_definition(fh: io.BytesIO):
         'file_id': fh.read(20).decode('utf-8')
     }
 
-def read_cram_container_header(fh: io.BytesIO):
+def read_cram_container_header(fh: io.BytesIO) -> Dict[str, Any]:
     """
     From an open BytesIO handle, returns a dictionary of the contents of a CRAM container header.
     The file definition is followed by one or more containers with the following header structure where the container

@@ -242,6 +242,15 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
             self.assertEqual(results, [1, 128, 268435456, 2 ** 32 - 1])
 
     def test_encode_decode_itf8(self):
+        """
+        Tests ITF-8 encoding and decoding functions.
+
+        Encodes and decodes all binary numbers: 0, 1, 2**1, 2**2, 2**3, ... , up until the highest 32-bit unsigned
+        integer: 2**32 - 1 (and ensures a few larger numbers error).
+
+        This ensures that the encoding and decoding functions are at least internally consistent, and checks the
+        accuracy of a select number of known cases (like that "2" produces b'\x02' produces "2" again).
+        """
         for n in range(32):
             for adjust_number in (-1, 0, 1):
                 original_integer = (2 ** n) + adjust_number
@@ -278,6 +287,15 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
         self.assertEqual(num_as_bytes, b'\xff\xff\xff\xff\xff')
 
     def test_encode_decode_ltf8(self):
+        """
+        Tests LTF-8 encoding and decoding functions.
+
+        Encodes and decodes all binary numbers: 0, 1, 2**1, 2**2, 2**3, ... , up until the highest 64-bit unsigned
+        integer: 2**64 - 1 (and ensures a few larger numbers error).
+
+        This ensures that the encoding and decoding functions are at least internally consistent, and checks the
+        accuracy of a select number of known cases (like that "2" produces b'\x02' produces "2" again).
+        """
         for n in range(63):
             for adjust_number in (-1, 0, 1):
                 original_integer = (2 ** n) + adjust_number

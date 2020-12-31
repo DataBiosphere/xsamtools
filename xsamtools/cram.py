@@ -163,7 +163,6 @@ def encode_itf8(num: int) -> bytes:
         raise ValueError('Number is too large for an unsigned 32-bit integer.')
     return bytes(integers)
 
-
 def decode_ltf8(fh: io.BytesIO) -> int:
     """
     Decode integer values with CRAM's LTF-8 protocol (Long Transformation Format - 8 bit).
@@ -260,31 +259,29 @@ def encode_ltf8(num: int) -> bytes:
     if num >> 7 == 0:
         integers = [num]
     elif num >> 14 == 0:
-        integers = [((num >> 8) | 0x80), (num & 0xFF)]
+        integers = [((num >> 8) | 0x80), num & 0xFF]
     elif num >> 21 == 0:
-        integers = [((num >> 16) | 0xC0), ((num >> 8) & 0xFF), (num & 0xFF)]
+        integers = [((num >> 16) | 0xC0), (num >> 8) & 0xFF, num & 0xFF]
     elif num >> 28 == 0:
-        integers = [((num >> 24) | 0xE0), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
+        integers = [((num >> 24) | 0xE0), (num >> 16) & 0xFF, (num >> 8) & 0xFF, num & 0xFF]
     elif num >> 35 == 0:
         # differs from itf8; doesn't truncate 4 bytes
-        integers = [((num >> 32) | 0xF0), ((num >> 24) & 0xFF), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF),
-                    (num & 0xFF)]
+        integers = [((num >> 32) | 0xF0), (num >> 24) & 0xFF, (num >> 16) & 0xFF, (num >> 8) & 0xFF, num & 0xFF]
     elif num >> 42 == 0:
         # this is where the number gets too big for itf8
-        integers = [((num >> 40) | 0xF8), ((num >> 32) & 0xFF), ((num >> 24) & 0xFF), ((num >> 16) & 0xFF),
-                    ((num >> 8) & 0xFF), (num & 0xFF)]
+        integers = [((num >> 40) | 0xF8), (num >> 32) & 0xFF, (num >> 24) & 0xFF, (num >> 16) & 0xFF,
+                    (num >> 8) & 0xFF, num & 0xFF]
     elif num >> 49 == 0:
-        # this is where the number gets too big for itf8
-        integers = [((num >> 48) | 0xFC), ((num >> 40) & 0xFF), ((num >> 32) & 0xFF), ((num >> 24) & 0xFF),
-                    ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
+        integers = [((num >> 48) | 0xFC), (num >> 40) & 0xFF, (num >> 32) & 0xFF, (num >> 24) & 0xFF,
+                    (num >> 16) & 0xFF, (num >> 8) & 0xFF, num & 0xFF]
     elif num >> 56 == 0:
-        # this is where the number gets too big for itf8; note the first byte here is constant
-        integers = [0xFE, ((num >> 48) & 0xFF), ((num >> 40) & 0xFF), ((num >> 32) & 0xFF), ((num >> 24) & 0xFF),
-                    ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
+        # note the first byte here is constant
+        integers = [0xFE, (num >> 48) & 0xFF, (num >> 40) & 0xFF, (num >> 32) & 0xFF, (num >> 24) & 0xFF,
+                    (num >> 16) & 0xFF, (num >> 8) & 0xFF, num & 0xFF]
     elif num >> 64 == 0:
-        # this is where the number gets too big for itf8; note the first byte here is constant
-        integers = [0xFF, ((num >> 56) & 0xFF), ((num >> 48) & 0xFF), ((num >> 40) & 0xFF), ((num >> 32) & 0xFF),
-                    ((num >> 24) & 0xFF), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
+        # note the first byte here is constant
+        integers = [0xFF, (num >> 56) & 0xFF, (num >> 48) & 0xFF, (num >> 40) & 0xFF, (num >> 32) & 0xFF,
+                    (num >> 24) & 0xFF, (num >> 16) & 0xFF, (num >> 8) & 0xFF, num & 0xFF]
     else:
         raise ValueError(f'Number is too large for an unsigned 64-bit integer: {num}')
     return bytes(integers)

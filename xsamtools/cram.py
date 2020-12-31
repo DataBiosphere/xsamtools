@@ -157,9 +157,10 @@ def encode_itf8(num: int) -> bytes:
 def decode_ltf8(fh: io.BytesIO) -> int:
     """
     Decode integer values with CRAM's LTF-8 protocol (Long Transformation Format - 8 bit).
-    LTF-8 represents a 64-bit Long Unsigned Integer (the long version of ITF-8).
-    The main difference between ITF-8 and LTF-8 is the number of bytes used to encode a single value.
-    LTF-8 allocates 1-9 bytes to store integers, and ITF-8 only allocates 1-5 bytes.
+
+    - LTF-8 represents a 64-bit Long Unsigned Integer (the long version of the 32-bit ITF-8).
+    - LTF-8 allocates 1-9 bytes to store integers, and ITF-8 only allocates 1-5 bytes.
+
     Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/LTF8.java  # noqa
     """
     int1 = next_int(fh)
@@ -171,20 +172,20 @@ def decode_ltf8(fh: io.BytesIO) -> int:
     # same as itf8
     elif (int1 & 64) == 0:
         int2 = next_int(fh)
-        return ((int1 & 127) << 8) | int2
+        return (int1 & 127) << 8 | int2
 
     # same as itf8
     elif (int1 & 32) == 0:
         int2 = next_int(fh)
         int3 = next_int(fh)
-        return ((int1 & 63) << 16) | int2 << 8 | int3
+        return (int1 & 63) << 16 | int2 << 8 | int3
 
     # same as itf8
     elif (int1 & 16) == 0:
         int2 = next_int(fh)
         int3 = next_int(fh)
         int4 = next_int(fh)
-        return ((int1 & 31) << (24)) | (int2 << 16) | (int3 << 8) | (int4)
+        return (int1 & 31) << 24 | int2 << 16 | int3 << 8 | int4
 
     # differs from itf8; doesn't truncate 4 bytes
     elif (int1 & 8) == 0:
@@ -192,7 +193,7 @@ def decode_ltf8(fh: io.BytesIO) -> int:
         int3 = next_int(fh)
         int4 = next_int(fh)
         int5 = next_int(fh)
-        return ((int1 & 15) << (32)) | (0xFF & int2) << (24) | (int3 << 16) | (int4 << 8) | (int5)
+        return (int1 & 15) << 32 | (0xFF & int2) << 24 | int3 << 16 | int4 << 8 | int5
 
     # this is where the number gets too big for itf8
     elif (int1 & 4) == 0:
@@ -201,9 +202,8 @@ def decode_ltf8(fh: io.BytesIO) -> int:
         int4 = next_int(fh)
         int5 = next_int(fh)
         int6 = next_int(fh)
-        return ((int1 & 7) << (40)) | (0xFF & int2) << (32) | (0xFF & int3) << (24) | (int4 << 16) | (int5 << 8) | (int6)
+        return (int1 & 7) << 40 | (0xFF & int2) << 32 | (0xFF & int3) << 24 | (int4 << 16) | (int5 << 8) | int6
 
-    # this is where the number gets too big for itf8
     elif (int1 & 2) == 0:
         int2 = next_int(fh)
         int3 = next_int(fh)
@@ -211,9 +211,9 @@ def decode_ltf8(fh: io.BytesIO) -> int:
         int5 = next_int(fh)
         int6 = next_int(fh)
         int7 = next_int(fh)
-        return ((int1 & 3) << 48) | (0xFF & int2) << 40 | (0xFF & int3) << 32 | (0xFF & int4) << 24 | (int5 << 16) | (int6 << 8) | int7
+        return (int1 & 3) << 48 | (0xFF & int2) << 40 | (0xFF & int3) << 32 | \
+               (0xFF & int4) << 24 | int5 << 16 | int6 << 8 | int7
 
-    # this is where the number gets too big for itf8
     # NOTE: int1 is unused here!
     elif (int1 & 1) == 0:
         int2 = next_int(fh)
@@ -223,9 +223,9 @@ def decode_ltf8(fh: io.BytesIO) -> int:
         int6 = next_int(fh)
         int7 = next_int(fh)
         int8 = next_int(fh)
-        return (0xFF & int2) << 48 | (0xFF & int3) << 40 | (0xFF & int4) << 32 | (0xFF & int5) << 24 | (int6 << 16) | (int7 << 8) | int8
+        return (0xFF & int2) << 48 | (0xFF & int3) << 40 | (0xFF & int4) << 32 | \
+               (0xFF & int5) << 24 | int6 << 16 | int7 << 8 | int8
 
-    # this is where the number gets too big for itf8
     # NOTE: int1 is also unused here!
     else:
         int2 = next_int(fh)
@@ -236,7 +236,8 @@ def decode_ltf8(fh: io.BytesIO) -> int:
         int7 = next_int(fh)
         int8 = next_int(fh)
         int9 = next_int(fh)
-        return (0xFF & int2) << 56 | (0xFF & int3) << 48 | (0xFF & int4) << 40 | (0xFF & int5) << 32 | (0xFF & int6) << 24 | int7 << 16 | int8 << 8 | int9
+        return (0xFF & int2) << 56 | (0xFF & int3) << 48 | (0xFF & int4) << 40 | (0xFF & int5) << 32 | \
+               (0xFF & int6) << 24 | int7 << 16 | int8 << 8 | int9
 
 def encode_ltf8(num: int) -> bytes:
     """
@@ -256,23 +257,24 @@ def encode_ltf8(num: int) -> bytes:
         integers = [((num >> 24) | 0xE0), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
     elif num >> 35 == 0:
         # differs from itf8; doesn't truncate 4 bytes
-        integers = [((num >> 32) | 0xF0), ((num >> 24) & 0xFF), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
+        integers = [((num >> 32) | 0xF0), ((num >> 24) & 0xFF), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF),
+                    (num & 0xFF)]
     elif num >> 42 == 0:
         # this is where the number gets too big for itf8
-        integers = [((num >> 40) | 0xF8), ((num >> 32) & 0xFF), ((num >> 24) & 0xFF), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
-        print(integers)
+        integers = [((num >> 40) | 0xF8), ((num >> 32) & 0xFF), ((num >> 24) & 0xFF), ((num >> 16) & 0xFF),
+                    ((num >> 8) & 0xFF), (num & 0xFF)]
     elif num >> 49 == 0:
         # this is where the number gets too big for itf8
-        integers = [((num >> 48) | 0xFC), ((num >> 40) & 0xFF), ((num >> 32) & 0xFF), ((num >> 24) & 0xFF), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
-        print(integers)
+        integers = [((num >> 48) | 0xFC), ((num >> 40) & 0xFF), ((num >> 32) & 0xFF), ((num >> 24) & 0xFF),
+                    ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
     elif num >> 56 == 0:
-        # this is where the number gets too big for itf8; note the first byte here differs and is merely a marker
-        integers = [0xFE, ((num >> 48) & 0xFF), ((num >> 40) & 0xFF), ((num >> 32) & 0xFF), ((num >> 24) & 0xFF), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
-        print(integers)
+        # this is where the number gets too big for itf8; note the first byte here is constant
+        integers = [0xFE, ((num >> 48) & 0xFF), ((num >> 40) & 0xFF), ((num >> 32) & 0xFF), ((num >> 24) & 0xFF),
+                    ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
     elif num >> 64 == 0:
-        # this is where the number gets too big for itf8; note the first byte here differs and is merely a marker
-        integers = [0xFF, ((num >> 56) & 0xFF), ((num >> 48) & 0xFF), ((num >> 40) & 0xFF), ((num >> 32) & 0xFF), ((num >> 24) & 0xFF), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
-        print(integers)
+        # this is where the number gets too big for itf8; note the first byte here is constant
+        integers = [0xFF, ((num >> 56) & 0xFF), ((num >> 48) & 0xFF), ((num >> 40) & 0xFF), ((num >> 32) & 0xFF),
+                    ((num >> 24) & 0xFF), ((num >> 16) & 0xFF), ((num >> 8) & 0xFF), (num & 0xFF)]
     else:
         raise ValueError(f'Number is too large for an unsigned 64-bit integer: {num}')
     return bytes(integers)

@@ -46,15 +46,22 @@ def read_fixed_length_cram_file_definition(fh: io.BytesIO):
     """
     return {
         'cram': fh.read(4).decode('utf-8'),
-        'major_version': int.from_bytes(fh.read(1), byteorder='little'),  # order shouldn't matter with 1 byte
-        'minor_version': int.from_bytes(fh.read(1), byteorder='little'),  # but it's required
+        'major_version': next_int(fh),
+        'minor_version': next_int(fh),
         'file_id': fh.read(20).decode('utf-8')
     }
 
 def int32(fh: io.BytesIO) -> int:
+    """A CRAM defined 32-bit signed integer type."""
     return int.from_bytes(fh.read(4), byteorder='little', signed=True)
 
 def next_int(fh: io.BytesIO) -> int:
+    """
+    Read a single byte as an unsigned integer.
+
+    This data type isn't given a special name like "ITF-8" or "int32" in the spec, and is only used twice in the
+    file descriptor as a special case, and as a convenience to construct other data types, like ITF-8 and LTF-8.
+    """
     return int.from_bytes(fh.read(1), byteorder='little', signed=False)
 
 def decode_itf8(fh: io.BytesIO) -> int:

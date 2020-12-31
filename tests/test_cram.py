@@ -14,7 +14,6 @@ sys.path.insert(0, pkg_root)  # noqa
 
 from tests.infra import SuppressWarningsMixin  # noqa
 from xsamtools import cram  # noqa
-from xsamtools.misc_utils import SubprocessErrorStdError  # noqa
 
 log = logging.getLogger(__name__)
 
@@ -271,27 +270,6 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
         with open(self.cram_local_path, 'rb') as f:
             cram_file_definition = cram.read_fixed_length_cram_file_definition(f)
         self.assertEqual(cram_file_definition, expected, f'{cram_file_definition} is not: {expected}')
-
-    def test_samtools_prints_stderr_exception(self):
-        nonexistent_output = 'nonexistent_output'
-        self.clean_up.append(nonexistent_output)
-        with self.subTest('Assert cram.write_final_file_with_samtools() raises SubprocessErrorStdError.'):
-            with self.assertRaises(SubprocessErrorStdError) as e:
-                cram.write_final_file_with_samtools('nonexistent_cram', None, None, True, nonexistent_output)
-            self.assertEqual(e.exception.returncode, 1)
-
-        with self.subTest('Assert cram.write_final_file_with_samtools() prints useful stderr.'):
-            exc = ''
-            try:
-                cram.write_final_file_with_samtools('nonexistent_cram', None, None, True, nonexistent_output)
-            except SubprocessErrorStdError:
-                import traceback
-                exc = traceback.format_exc()
-            for error_msg in [
-                '[E::hts_open_format] Failed to open file "nonexistent_cram" : No such file or directory',
-                'samtools view: failed to open "nonexistent_cram" for reading: No such file or directory'
-            ]:
-                self.assertIn(error_msg, exc, exc)
 
 if __name__ == '__main__':
     unittest.main()

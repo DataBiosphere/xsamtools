@@ -17,7 +17,7 @@ from urllib.request import urlretrieve
 from terra_notebook_utils import xprofile
 
 from xsamtools import gs_utils
-from xsamtools.misc_utils import subprocess_w_stderr_run
+from xsamtools.utils import run
 
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
@@ -193,10 +193,11 @@ def write_final_file_with_samtools(cram: str,
         log.warning('No crai file present, this may take a while.')
         crai_arg = ''
 
-    cmd = f'samtools view {cram_format_arg} {cram} {crai_arg} {region_args}'
+    # we can get away with a simple split on spaces here because there's nothing complicated going on
+    cmd = f'samtools view {cram_format_arg} {cram} {crai_arg} {region_args}'.split()
 
     log.info(f'Now running: {cmd}')
-    subprocess_w_stderr_run(cmd, stdout=open(output, 'w'), check=True)
+    run(cmd, stdout=open(output, 'w'), check=True)
     log.debug(f'Output CRAM successfully generated at: {output}')
 
 def stage(uri: str, output: str) -> None:

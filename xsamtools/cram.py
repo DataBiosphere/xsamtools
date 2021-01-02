@@ -13,7 +13,7 @@ import io
 
 from collections import namedtuple
 from tempfile import TemporaryDirectory
-from typing import Optional
+from typing import Optional, List
 from urllib.request import urlretrieve
 from terra_notebook_utils import xprofile
 
@@ -192,7 +192,7 @@ def format_and_check_cram(cram: str) -> str:
     assert os.path.exists(cram)
     return cram
 
-def pipe_two_commands(cmd1, cmd2):
+def pipe_two_commands(cmd1: List[str], cmd2: List[str]):
     log.info(f'Now running proxy for: "{" ".join(cmd1)} | {" ".join(cmd2)}"')
     p1 = subprocess.Popen(cmd1, stdout=subprocess.PIPE)
     p2 = subprocess.Popen(cmd2, stdin=p1.stdout)

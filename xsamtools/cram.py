@@ -221,7 +221,6 @@ def write_final_file_with_samtools(cram: str,
 
     # samtools seems to produce a benign(?) error: 'samtools view: error closing "-": -1'
     # this appears to happen after the cram file is written however, & doesn't seem to affect the result
-    # TODO: 1. make sure that this is the case ^; 2. suppress this error if so
     pipe_two_commands(cmd1, cmd2)
     log.debug(f'Output CRAM successfully generated at: {output}')
 

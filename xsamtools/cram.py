@@ -13,7 +13,7 @@ import io
 
 from collections import namedtuple
 from tempfile import TemporaryDirectory
-from typing import Optional
+from typing import Optional, Dict, Any, Union
 from urllib.request import urlretrieve
 from terra_notebook_utils import xprofile
 
@@ -22,7 +22,7 @@ from xsamtools import gs_utils
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
 
-def read_fixed_length_cram_file_definition(fh: io.BytesIO):
+def read_fixed_length_cram_file_definition(fh: io.BytesIO) -> Dict[str, Union[int, str]]:
     """
     This definition is always the first 26 bytes of a cram file.
 
@@ -49,6 +49,52 @@ def read_fixed_length_cram_file_definition(fh: io.BytesIO):
         'major_version': decode_int8(fh),
         'minor_version': decode_int8(fh),
         'file_id': fh.read(20).decode('utf-8')
+    }
+
+def read_cram_container_header(fh: io.BytesIO) -> Dict[str, Any]:
+    """
+    From an open BytesIO handle, returns a dictionary of the contents of a CRAM container header.
+    The file definition is followed by one or more containers with the following header structure where the container
+    content is stored in the ‘blocks’ field:
+    -----------------------------------------------------------------------------------------------------------
+    | Data Type      Name                        Value                                                        |
+    -----------------------------------------------------------------------------------------------------------
+    | INT32          length                      The sum of the lengths of all blocks in this container       |
+    |                                              (headers and data); equal to the total byte length of the  |
+    |                                              container minus the byte length of this header structure.  |
+    | ITF-8           reference sequence id      Reference sequence identifier or:                            |
+    |                                               -1 for unmapped reads                                     |
+    |                                               -2 for multiple reference sequences                       |
+    |                                            All slices in this container must have a reference sequence  |
+    |                                              id matching this value.                                    |
+    | ITF-8           reference start position   The alignment start position or 0 if the container is        |
+    |                                              multiple-reference or contains unmapped unplaced reads     |
+    | ITF-8           alignment span             The length of the alignment or 0 if the container is         |
+    |                                              multiple-reference or contains unmapped unplaced reads.    |
+    | ITF-8           number of records          Number of records in the container.                          |
+    | LTF-8           record counter             1-based sequential index of records in the file/stream.      |
+    | LTF-8           bases                      Number of read bases.                                        |
+    | ITF-8           number of blocks           The total number of blocks in this container.                |
+    | Array<ITF-8>    landmarks                  The locations of slices in this container as byte offsets    |
+    |                                             from the end of this container header, used for random      |
+    |                                             access indexing. The landmark count must equal the slice    |
+    |                                             count.  Since the block before the first slice is the       |
+    |                                             compression header, landmarks[0] is equal to the byte       |
+    |                                             length of the compression header.                           |
+    | INT             crc32                      CRC32 hash of the all the preceding bytes in the container.  |
+    -----------------------------------------------------------------------------------------------------------
+    """
+    return {
+        "length": decode_int32(fh),
+        "reference_sequence_id": decode_itf8(fh),
+        "starting_position": decode_itf8(fh),
+        "alignment_span": decode_itf8(fh),
+        "number_of_records": decode_itf8(fh),
+        "record_counter": decode_ltf8(fh),
+        "bases": decode_ltf8(fh),
+        "number_of_blocks": decode_itf8(fh),
+        "landmark": decode_itf8_array(fh),
+        "crc_hash": fh.read(4)
     }
 
 def decode_int32(fh: io.BytesIO) -> int:

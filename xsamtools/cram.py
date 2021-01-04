@@ -83,8 +83,6 @@ def read_cram_container_header(fh: io.BytesIO) -> Dict[str, Any]:
     |                                             length of the compression header.                           |
     | INT             crc32                      CRC32 hash of the all the preceding bytes in the container.  |
     -----------------------------------------------------------------------------------------------------------
-    :param fh:
-    :return:
     """
     return {
         "length": int32(fh),

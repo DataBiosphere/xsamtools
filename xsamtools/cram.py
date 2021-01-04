@@ -13,7 +13,7 @@ import io
 
 from collections import namedtuple
 from tempfile import TemporaryDirectory
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 from urllib.request import urlretrieve
 from terra_notebook_utils import xprofile
 
@@ -22,7 +22,7 @@ from xsamtools import gs_utils
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
 
-def read_fixed_length_cram_file_definition(fh: io.BytesIO) -> Dict[str, str]:
+def read_fixed_length_cram_file_definition(fh: io.BytesIO) -> Dict[str, Union[int, str]]:
     """
     This definition is always the first 26 bytes of a cram file.
 

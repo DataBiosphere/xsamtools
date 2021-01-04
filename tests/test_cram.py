@@ -242,6 +242,15 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
             self.assertEqual(results, [1, 128, 268435456, 2 ** 32 - 1])
 
     def test_encode_decode_itf8(self):
+        """
+        Tests ITF-8 encoding and decoding functions.
+
+        Encodes and decodes all binary numbers: 0, 1, 2**1, 2**2, 2**3, ... , up until the highest 32-bit unsigned
+        integer: 2**32 - 1 (and ensures a few larger numbers error).
+
+        This ensures that the encoding and decoding functions are at least internally consistent, and checks the
+        accuracy of a select number of known cases (like that "2" produces b'\x02' produces "2" again).
+        """
         for n in range(32):
             for adjust_number in (-1, 0, 1):
                 original_integer = (2 ** n) + adjust_number
@@ -276,6 +285,51 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
                 cram.encode_itf8(i)
         num_as_bytes = cram.encode_itf8(2 ** 32 - 1)  # this should be the highest 32-bit unsigned int allowed
         self.assertEqual(num_as_bytes, b'\xff\xff\xff\xff\xff')
+
+    def test_encode_decode_ltf8(self):
+        """
+        Tests LTF-8 encoding and decoding functions.
+
+        Encodes and decodes all binary numbers: 0, 1, 2**1, 2**2, 2**3, ... , up until the highest 64-bit unsigned
+        integer: 2**64 - 1 (and ensures a few larger numbers error).
+
+        This ensures that the encoding and decoding functions are at least internally consistent, and checks the
+        accuracy of a select number of known cases (like that "2" produces b'\x02' produces "2" again).
+        """
+        for n in range(63):
+            for adjust_number in (-1, 0, 1):
+                original_integer = (2 ** n) + adjust_number
+
+                # convert the integer to a bytestring, as would be written into a cram file
+                num_as_bytes = cram.encode_ltf8(original_integer)
+                # then wrap it as a ByteIO object to mimic an open file handle to that bytestring
+                readable_bytes_as_handle = io.BytesIO(num_as_bytes)
+                # ensure that the decoder returns the same number we started with
+                decoded_integer = cram.decode_ltf8(readable_bytes_as_handle)
+                self.assertEqual(original_integer, decoded_integer)
+
+                if original_integer == 1:
+                    self.assertEqual(num_as_bytes, b'\x01')
+                elif original_integer == 2:
+                    self.assertEqual(num_as_bytes, b'\x02')
+                elif original_integer == 16:
+                    self.assertEqual(num_as_bytes, b'\x10')
+                elif original_integer == 128:
+                    self.assertEqual(num_as_bytes, b'\x80\x80')
+                elif original_integer == 16384:
+                    self.assertEqual(num_as_bytes, b'\xc0@\x00')
+                elif original_integer == 4194304:
+                    self.assertEqual(num_as_bytes, b'\xe0@\x00\x00')
+                elif original_integer == 268435456:
+                    self.assertEqual(num_as_bytes, b'\xf0\x10\x00\x00\x00')  # different than itf8
+                elif original_integer == 2147483648:
+                    self.assertEqual(num_as_bytes, b'\xf0\x80\x00\x00\x00')  # different than itf8
+
+        for i in (2**64, 2**64 + 1, 2**80):
+            with self.assertRaises(ValueError):
+                cram.encode_ltf8(i)
+        num_as_bytes = cram.encode_ltf8(2 ** 64 - 1)  # this should be the highest 64-bit unsigned int allowed
+        self.assertEqual(num_as_bytes, b'\xff\xff\xff\xff\xff\xff\xff\xff\xff')
 
     def test_read_cram_file_definition(self):
         expected = {'cram': 'CRAM',

@@ -13,7 +13,7 @@ import io
 
 from collections import namedtuple
 from tempfile import TemporaryDirectory
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, List
 from urllib.request import urlretrieve
 from terra_notebook_utils import xprofile
 
@@ -371,23 +371,36 @@ def format_and_check_cram(cram: str) -> str:
     assert os.path.exists(cram)
     return cram
 
+def pipe_two_commands(cmd1: List[str], cmd2: List[str]):
+    log.info(f'Now running proxy for: "{" ".join(cmd1)} | {" ".join(cmd2)}"')
+    p1 = subprocess.Popen(cmd1, stdout=subprocess.PIPE)
+    p2 = subprocess.Popen(cmd2, stdin=p1.stdout)
+    p1.stdout.close()  # Allow p1 to receive a SIGPIPE if p2 exits.
+    p2.communicate()
+
 def write_final_file_with_samtools(cram: str,
                                    crai: Optional[str],
                                    regions: Optional[str],
                                    cram_format: bool,
                                    output: str) -> None:
-    region_args = ' '.join(regions.split(',')) if regions else ''
-    cram_format_arg = '-C' if cram_format else ''
+    if not crai:
+        log.warning('No crai file specified, this might take a long time while samtools generates it...')
+
+    cmd1 = ['scripts/stream_cloud_file', '--path', cram] if cram.startswith('gs://') else ['cat', cram]
+
+    cmd2 = ['samtools', 'view', '-']
+    if cram_format:
+        cmd2 += ['-C']
     if crai:
-        crai_arg = f'-X {crai}'
-    else:
-        log.warning('No crai file present, this may take a while.')
-        crai_arg = ''
+        cmd2 += ['-X', crai]
+    if regions:
+        cmd2 += regions.split(',')
+    if output:
+        cmd2 += ['-o', output]
 
-    cmd = f'samtools view {cram_format_arg} {cram} {crai_arg} {region_args}'
-
-    log.info(f'Now running: {cmd}')
-    subprocess.run(cmd, shell=True, stdout=open(output, 'w'), stderr=subprocess.PIPE, check=True)
+    # samtools seems to produce a benign(?) error: 'samtools view: error closing "-": -1'
+    # this appears to happen after the cram file is written however, & doesn't seem to affect the result
+    pipe_two_commands(cmd1, cmd2)
     log.debug(f'Output CRAM successfully generated at: {output}')
 
 def stage(uri: str, output: str) -> None:
@@ -427,13 +440,21 @@ def view(cram: str,
                               f'Only local file outputs are currently supported.'
 
     with TemporaryDirectory() as staging_dir:
-        staged_cram = os.path.join(staging_dir, 'tmp.cram')
-        stage(uri=cram, output=staged_cram)
+        # defaults
+        staged_cram = cram
+        staged_crai = crai
+
+        if not cram.startswith('gs://'):
+            # gs files are skipped because they will be streamed from the cloud directly
+            # staged files are linked into the stage dir and then streamed with cat
+            staged_cram = os.path.join(staging_dir, 'tmp.cram')
+            stage(uri=cram, output=staged_cram)
+
         if crai:
+            # always stage a crai if the user provides one, allowing samtools to find it...
+            # otherwise samtools may generate one which can take a very long time
             staged_crai = os.path.join(staging_dir, 'tmp.crai')
             stage(uri=crai, output=staged_crai)
-        else:
-            staged_crai = None
 
         write_final_file_with_samtools(staged_cram, staged_crai, regions, cram_format, output)
 

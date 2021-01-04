@@ -125,7 +125,7 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
         # This check allows us to change samtools versions without significant changes to the test.
 
     def cram_cli(self, cram_uri, crai_uri):
-        output_file = str(uuid4())
+        output_file = f'{uuid4()}.cram'
         self.clean_up.append(output_file)
         cmd = f'xsamtools cram view --cram {cram_uri} --crai {crai_uri} -C --output {output_file}'
         log.info(f'Now running: {cmd}')

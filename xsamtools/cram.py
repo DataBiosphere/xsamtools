@@ -13,7 +13,7 @@ import io
 
 from collections import namedtuple
 from tempfile import TemporaryDirectory
-from typing import Optional, List
+from typing import Optional, Dict, Any, Union, List
 from urllib.request import urlretrieve
 from terra_notebook_utils import xprofile
 
@@ -22,7 +22,7 @@ from xsamtools import gs_utils
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
 
-def read_fixed_length_cram_file_definition(fh: io.BytesIO):
+def read_fixed_length_cram_file_definition(fh: io.BytesIO) -> Dict[str, Union[int, str]]:
     """
     This definition is always the first 26 bytes of a cram file.
 
@@ -46,12 +46,68 @@ def read_fixed_length_cram_file_definition(fh: io.BytesIO):
     """
     return {
         'cram': fh.read(4).decode('utf-8'),
-        'major_version': int.from_bytes(fh.read(1), byteorder='little'),  # order shouldn't matter with 1 byte
-        'minor_version': int.from_bytes(fh.read(1), byteorder='little'),  # but it's required
+        'major_version': decode_int8(fh),
+        'minor_version': decode_int8(fh),
         'file_id': fh.read(20).decode('utf-8')
     }
 
-def next_int(fh: io.BytesIO) -> int:
+def read_cram_container_header(fh: io.BytesIO) -> Dict[str, Any]:
+    """
+    From an open BytesIO handle, returns a dictionary of the contents of a CRAM container header.
+    The file definition is followed by one or more containers with the following header structure where the container
+    content is stored in the ‘blocks’ field:
+    -----------------------------------------------------------------------------------------------------------
+    | Data Type      Name                        Value                                                        |
+    -----------------------------------------------------------------------------------------------------------
+    | INT32          length                      The sum of the lengths of all blocks in this container       |
+    |                                              (headers and data); equal to the total byte length of the  |
+    |                                              container minus the byte length of this header structure.  |
+    | ITF-8           reference sequence id      Reference sequence identifier or:                            |
+    |                                               -1 for unmapped reads                                     |
+    |                                               -2 for multiple reference sequences                       |
+    |                                            All slices in this container must have a reference sequence  |
+    |                                              id matching this value.                                    |
+    | ITF-8           reference start position   The alignment start position or 0 if the container is        |
+    |                                              multiple-reference or contains unmapped unplaced reads     |
+    | ITF-8           alignment span             The length of the alignment or 0 if the container is         |
+    |                                              multiple-reference or contains unmapped unplaced reads.    |
+    | ITF-8           number of records          Number of records in the container.                          |
+    | LTF-8           record counter             1-based sequential index of records in the file/stream.      |
+    | LTF-8           bases                      Number of read bases.                                        |
+    | ITF-8           number of blocks           The total number of blocks in this container.                |
+    | Array<ITF-8>    landmarks                  The locations of slices in this container as byte offsets    |
+    |                                             from the end of this container header, used for random      |
+    |                                             access indexing. The landmark count must equal the slice    |
+    |                                             count.  Since the block before the first slice is the       |
+    |                                             compression header, landmarks[0] is equal to the byte       |
+    |                                             length of the compression header.                           |
+    | INT             crc32                      CRC32 hash of the all the preceding bytes in the container.  |
+    -----------------------------------------------------------------------------------------------------------
+    """
+    return {
+        "length": decode_int32(fh),
+        "reference_sequence_id": decode_itf8(fh),
+        "starting_position": decode_itf8(fh),
+        "alignment_span": decode_itf8(fh),
+        "number_of_records": decode_itf8(fh),
+        "record_counter": decode_ltf8(fh),
+        "bases": decode_ltf8(fh),
+        "number_of_blocks": decode_itf8(fh),
+        "landmark": decode_itf8_array(fh),
+        "crc_hash": fh.read(4)
+    }
+
+def decode_int32(fh: io.BytesIO) -> int:
+    """A CRAM defined 32-bit signed integer type."""
+    return int.from_bytes(fh.read(4), byteorder='little', signed=True)
+
+def decode_int8(fh: io.BytesIO) -> int:
+    """
+    Read a single byte as an unsigned integer.
+
+    This data type isn't given a special name like "ITF-8" or "int32" in the spec, and is only used twice in the
+    file descriptor as a special case, and as a convenience to construct other data types, like ITF-8 and LTF-8.
+    """
     return int.from_bytes(fh.read(1), byteorder='little', signed=False)
 
 def decode_itf8(fh: io.BytesIO) -> int:
@@ -83,31 +139,31 @@ def decode_itf8(fh: io.BytesIO) -> int:
      *      write out [bits 1-8]
     Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/ITF8.java#L12  # noqa
     """
-    int1 = next_int(fh)
+    int1 = decode_int8(fh)
 
     if (int1 & 128) == 0:
         return int1
 
     elif (int1 & 64) == 0:
-        int2 = next_int(fh)
+        int2 = decode_int8(fh)
         return ((int1 & 127) << 8) | int2
 
     elif (int1 & 32) == 0:
-        int2 = next_int(fh)
-        int3 = next_int(fh)
+        int2 = decode_int8(fh)
+        int3 = decode_int8(fh)
         return ((int1 & 63) << 16) | int2 << 8 | int3
 
     elif (int1 & 16) == 0:
-        int2 = next_int(fh)
-        int3 = next_int(fh)
-        int4 = next_int(fh)
+        int2 = decode_int8(fh)
+        int3 = decode_int8(fh)
+        int4 = decode_int8(fh)
         return ((int1 & 31) << 24) | int2 << 16 | int3 << 8 | int4
 
     else:
-        int2 = next_int(fh)
-        int3 = next_int(fh)
-        int4 = next_int(fh)
-        int5 = next_int(fh)
+        int2 = decode_int8(fh)
+        int3 = decode_int8(fh)
+        int4 = decode_int8(fh)
+        int5 = decode_int8(fh)
         return ((int1 & 15) << 28) | int2 << 20 | int3 << 12 | int4 << 4 | (15 & int5)
 
 def encode_itf8(num: int) -> bytes:
@@ -151,6 +207,129 @@ def encode_itf8(num: int) -> bytes:
         integers = [((num >> 28) | 0xF0), ((num >> 20) & 0xFF), ((num >> 12) & 0xFF), ((num >> 4) & 0xFF), (num & 0xFF)]
     else:
         raise ValueError('Number is too large for an unsigned 32-bit integer.')
+    return bytes(integers)
+
+def decode_ltf8(fh: io.BytesIO) -> int:
+    """
+    Decode integer values with CRAM's LTF-8 protocol (Long Transformation Format - 8 bit).
+
+    - LTF-8 represents a 64-bit Long Unsigned Integer (the long version of the 32-bit ITF-8).
+    - LTF-8 allocates 1-9 bytes to store integers, and ITF-8 only allocates 1-5 bytes.
+
+    Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/LTF8.java  # noqa
+    """
+    int1 = decode_int8(fh)
+
+    # same as itf8
+    if (int1 & 128) == 0:
+        return int1
+
+    # same as itf8
+    elif (int1 & 64) == 0:
+        int2 = decode_int8(fh)
+        return (int1 & 127) << 8 | int2
+
+    # same as itf8
+    elif (int1 & 32) == 0:
+        int2 = decode_int8(fh)
+        int3 = decode_int8(fh)
+        return (int1 & 63) << 16 | int2 << 8 | int3
+
+    # same as itf8
+    elif (int1 & 16) == 0:
+        int2 = decode_int8(fh)
+        int3 = decode_int8(fh)
+        int4 = decode_int8(fh)
+        return (int1 & 31) << 24 | int2 << 16 | int3 << 8 | int4
+
+    # differs from itf8; doesn't truncate 4 bytes
+    elif (int1 & 8) == 0:
+        int2 = decode_int8(fh)
+        int3 = decode_int8(fh)
+        int4 = decode_int8(fh)
+        int5 = decode_int8(fh)
+        return (int1 & 15) << 32 | (0xFF & int2) << 24 | int3 << 16 | int4 << 8 | int5
+
+    # this is where the number gets too big for itf8
+    elif (int1 & 4) == 0:
+        int2 = decode_int8(fh)
+        int3 = decode_int8(fh)
+        int4 = decode_int8(fh)
+        int5 = decode_int8(fh)
+        int6 = decode_int8(fh)
+        return (int1 & 7) << 40 | (0xFF & int2) << 32 | (0xFF & int3) << 24 | (int4 << 16) | (int5 << 8) | int6
+
+    elif (int1 & 2) == 0:
+        int2 = decode_int8(fh)
+        int3 = decode_int8(fh)
+        int4 = decode_int8(fh)
+        int5 = decode_int8(fh)
+        int6 = decode_int8(fh)
+        int7 = decode_int8(fh)
+        return (int1 & 3) << 48 | (0xFF & int2) << 40 | (0xFF & int3) << 32 | \
+               (0xFF & int4) << 24 | int5 << 16 | int6 << 8 | int7
+
+    # NOTE: int1 is unused here!
+    elif (int1 & 1) == 0:
+        int2 = decode_int8(fh)
+        int3 = decode_int8(fh)
+        int4 = decode_int8(fh)
+        int5 = decode_int8(fh)
+        int6 = decode_int8(fh)
+        int7 = decode_int8(fh)
+        int8 = decode_int8(fh)
+        return (0xFF & int2) << 48 | (0xFF & int3) << 40 | (0xFF & int4) << 32 | \
+               (0xFF & int5) << 24 | int6 << 16 | int7 << 8 | int8
+
+    # NOTE: int1 is also unused here!
+    else:
+        int2 = decode_int8(fh)
+        int3 = decode_int8(fh)
+        int4 = decode_int8(fh)
+        int5 = decode_int8(fh)
+        int6 = decode_int8(fh)
+        int7 = decode_int8(fh)
+        int8 = decode_int8(fh)
+        int9 = decode_int8(fh)
+        return (0xFF & int2) << 56 | (0xFF & int3) << 48 | (0xFF & int4) << 40 | (0xFF & int5) << 32 | \
+               (0xFF & int6) << 24 | int7 << 16 | int8 << 8 | int9
+
+def encode_ltf8(num: int) -> bytes:
+    """
+    Encode integer values with CRAM's LTF-8 protocol (Long Transformation Format - 8 bit).
+    LTF-8 represents a 64-bit Long Unsigned Integer (the long version of ITF-8).
+    The main difference between ITF-8 and LTF-8 is the number of bytes used to encode a single value.
+    LTF-8 allocates 1-9 bytes to store integers, and ITF-8 only allocates 1-5 bytes.
+    Source: https://github.com/samtools/htsjdk/blob/b24c9521958514c43a121651d1fdb2cdeb77cc0b/src/main/java/htsjdk/samtools/cram/io/LTF8.java  # noqa
+    """
+    if num >> 7 == 0:
+        integers = [num]
+    elif num >> 14 == 0:
+        integers = [((num >> 8) | 0x80), num & 0xFF]
+    elif num >> 21 == 0:
+        integers = [((num >> 16) | 0xC0), (num >> 8) & 0xFF, num & 0xFF]
+    elif num >> 28 == 0:
+        integers = [((num >> 24) | 0xE0), (num >> 16) & 0xFF, (num >> 8) & 0xFF, num & 0xFF]
+    elif num >> 35 == 0:
+        # differs from itf8; doesn't truncate 4 bytes
+        integers = [((num >> 32) | 0xF0), (num >> 24) & 0xFF, (num >> 16) & 0xFF, (num >> 8) & 0xFF, num & 0xFF]
+    elif num >> 42 == 0:
+        # this is where the number gets too big for itf8
+        integers = [((num >> 40) | 0xF8), (num >> 32) & 0xFF, (num >> 24) & 0xFF, (num >> 16) & 0xFF,
+                    (num >> 8) & 0xFF, num & 0xFF]
+    elif num >> 49 == 0:
+        integers = [((num >> 48) | 0xFC), (num >> 40) & 0xFF, (num >> 32) & 0xFF, (num >> 24) & 0xFF,
+                    (num >> 16) & 0xFF, (num >> 8) & 0xFF, num & 0xFF]
+    elif num >> 56 == 0:
+        # note the first byte here is constant
+        integers = [0xFE, (num >> 48) & 0xFF, (num >> 40) & 0xFF, (num >> 32) & 0xFF, (num >> 24) & 0xFF,
+                    (num >> 16) & 0xFF, (num >> 8) & 0xFF, num & 0xFF]
+    elif num >> 64 == 0:
+        # note the first byte here is constant
+        integers = [0xFF, (num >> 56) & 0xFF, (num >> 48) & 0xFF, (num >> 40) & 0xFF, (num >> 32) & 0xFF,
+                    (num >> 24) & 0xFF, (num >> 16) & 0xFF, (num >> 8) & 0xFF, num & 0xFF]
+    else:
+        raise ValueError(f'Number is too large for an unsigned 64-bit integer: {num}')
     return bytes(integers)
 
 def decode_itf8_array(handle: io.BytesIO, size: Optional[int] = None):

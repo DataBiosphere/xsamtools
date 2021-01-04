@@ -23,6 +23,7 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
     clean_up: List[str] = []
     cram_gs_path = 'gs://lons-test/ce#5b.cram'
     cram_local_path = os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram')
+    cram_v3_local_path = os.path.join(pkg_root, 'tests/fixtures/ce#5b_v3.cram')
     crai_gs_path = 'gs://lons-test/ce#5b.cram.crai'
     crai_local_path = os.path.join(pkg_root, 'tests/fixtures/ce#5b.cram.crai')
     # basically the entire contents of ce#5b.cram
@@ -242,6 +243,15 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
             self.assertEqual(results, [1, 128, 268435456, 2 ** 32 - 1])
 
     def test_encode_decode_itf8(self):
+        """
+        Tests ITF-8 encoding and decoding functions.
+
+        Encodes and decodes all binary numbers: 0, 1, 2**1, 2**2, 2**3, ... , up until the highest 32-bit unsigned
+        integer: 2**32 - 1 (and ensures a few larger numbers error).
+
+        This ensures that the encoding and decoding functions are at least internally consistent, and checks the
+        accuracy of a select number of known cases (like that "2" produces b'\x02' produces "2" again).
+        """
         for n in range(32):
             for adjust_number in (-1, 0, 1):
                 original_integer = (2 ** n) + adjust_number
@@ -277,14 +287,117 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
         num_as_bytes = cram.encode_itf8(2 ** 32 - 1)  # this should be the highest 32-bit unsigned int allowed
         self.assertEqual(num_as_bytes, b'\xff\xff\xff\xff\xff')
 
-    def test_read_cram_file_definition(self):
-        expected = {'cram': 'CRAM',
+    def test_encode_decode_ltf8(self):
+        """
+        Tests LTF-8 encoding and decoding functions.
+
+        Encodes and decodes all binary numbers: 0, 1, 2**1, 2**2, 2**3, ... , up until the highest 64-bit unsigned
+        integer: 2**64 - 1 (and ensures a few larger numbers error).
+
+        This ensures that the encoding and decoding functions are at least internally consistent, and checks the
+        accuracy of a select number of known cases (like that "2" produces b'\x02' produces "2" again).
+        """
+        for n in range(63):
+            for adjust_number in (-1, 0, 1):
+                original_integer = (2 ** n) + adjust_number
+
+                # convert the integer to a bytestring, as would be written into a cram file
+                num_as_bytes = cram.encode_ltf8(original_integer)
+                # then wrap it as a ByteIO object to mimic an open file handle to that bytestring
+                readable_bytes_as_handle = io.BytesIO(num_as_bytes)
+                # ensure that the decoder returns the same number we started with
+                decoded_integer = cram.decode_ltf8(readable_bytes_as_handle)
+                self.assertEqual(original_integer, decoded_integer)
+
+                if original_integer == 1:
+                    self.assertEqual(num_as_bytes, b'\x01')
+                elif original_integer == 2:
+                    self.assertEqual(num_as_bytes, b'\x02')
+                elif original_integer == 16:
+                    self.assertEqual(num_as_bytes, b'\x10')
+                elif original_integer == 128:
+                    self.assertEqual(num_as_bytes, b'\x80\x80')
+                elif original_integer == 16384:
+                    self.assertEqual(num_as_bytes, b'\xc0@\x00')
+                elif original_integer == 4194304:
+                    self.assertEqual(num_as_bytes, b'\xe0@\x00\x00')
+                elif original_integer == 268435456:
+                    self.assertEqual(num_as_bytes, b'\xf0\x10\x00\x00\x00')  # different than itf8
+                elif original_integer == 2147483648:
+                    self.assertEqual(num_as_bytes, b'\xf0\x80\x00\x00\x00')  # different than itf8
+
+        for i in (2**64, 2**64 + 1, 2**80):
+            with self.assertRaises(ValueError):
+                cram.encode_ltf8(i)
+        num_as_bytes = cram.encode_ltf8(2 ** 64 - 1)  # this should be the highest 64-bit unsigned int allowed
+        self.assertEqual(num_as_bytes, b'\xff\xff\xff\xff\xff\xff\xff\xff\xff')
+
+    def test_read_cram_file(self):
+        """
+        Test parsing the file description and first container header for CRAM versions 2.0 and 3.0 respectively.
+        """
+        self.read_v2_cram_file()
+        self.read_v3_cram_file()
+
+    def read_v2_cram_file(self):
+        with open(self.cram_local_path, 'rb') as f:
+            with self.subTest('Read CRAM file definition.'):
+                expected_file_definition = {
+                    'cram': 'CRAM',
                     'major_version': 2,
                     'minor_version': 0,
-                    'file_id': '-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'}
-        with open(self.cram_local_path, 'rb') as f:
-            cram_file_definition = cram.read_fixed_length_cram_file_definition(f)
-        self.assertEqual(cram_file_definition, expected, f'{cram_file_definition} is not: {expected}')
+                    'file_id': '-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                }
+                cram_file_definition = cram.read_fixed_length_cram_file_definition(f)
+                self.assertEqual(cram_file_definition, expected_file_definition,
+                                 f'{cram_file_definition} is not: {expected_file_definition}')
+            # this should immediately follow the CRAM file definition.
+            with self.subTest('Read CRAM container header.'):
+                expected_container_header = {
+                    'length': 10000,
+                    'reference_sequence_id': 0,
+                    'starting_position': 0,
+                    'alignment_span': 0,
+                    'number_of_records': 0,
+                    'record_counter': 0,
+                    'bases': 0,
+                    'number_of_blocks': 1,
+                    'landmark': [0],
+                    'crc_hash': b'\x00\x00\x00\xa7'
+                }
+                cram_container_header = cram.read_cram_container_header(f)
+                self.assertEqual(cram_container_header, expected_container_header,
+                                 f'{cram_container_header} is not: {expected_container_header}')
+
+    def read_v3_cram_file(self):
+        with open(self.cram_v3_local_path, 'rb') as f:
+            with self.subTest('Read CRAM file definition.'):
+                expected_file_definition = {
+                    'cram': 'CRAM',
+                    'major_version': 3,
+                    'minor_version': 0,
+                    'file_id': '-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+                }
+                cram_file_definition = cram.read_fixed_length_cram_file_definition(f)
+                self.assertEqual(cram_file_definition, expected_file_definition,
+                                 f'{cram_file_definition} is not: {expected_file_definition}')
+            # this should immediately follow the CRAM file definition.
+            with self.subTest('Read CRAM container header.'):
+                expected_container_header = {
+                    'length': 441,
+                    'reference_sequence_id': 0,
+                    'starting_position': 0,
+                    'alignment_span': 0,
+                    'number_of_records': 0,
+                    'record_counter': 0,
+                    'bases': 0,
+                    'number_of_blocks': 2,
+                    'landmark': [0, 287],
+                    'crc_hash': b'\x80\x9b\xd7\xc1'
+                }
+                cram_container_header = cram.read_cram_container_header(f)
+                self.assertEqual(cram_container_header, expected_container_header,
+                                 f'{cram_container_header} is not: {expected_container_header}')
 
 if __name__ == '__main__':
     unittest.main()

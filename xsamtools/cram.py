@@ -4,6 +4,7 @@ Tools for working with CRAM files.
 CRAM/CRAI spec here:
 http://samtools.github.io/hts-specs/CRAMv3.pdf
 """
+import copy
 import os
 import subprocess
 import datetime
@@ -13,7 +14,7 @@ import io
 
 from collections import namedtuple
 from tempfile import TemporaryDirectory
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, Tuple
 from urllib.request import urlretrieve
 from terra_notebook_utils import xprofile
 
@@ -21,6 +22,10 @@ from xsamtools import gs_utils
 
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
+
+
+class SeqMapError(Exception):
+    pass
 
 def read_fixed_length_cram_file_definition(fh: io.BytesIO) -> Dict[str, Union[int, str]]:
     """
@@ -96,6 +101,86 @@ def read_cram_container_header(fh: io.BytesIO) -> Dict[str, Any]:
         "landmark": decode_itf8_array(fh),
         "crc_hash": fh.read(4)
     }
+
+def read_seq_names_from_sam_header(fh, block_size: int) -> Tuple[Dict[str, int], int]:
+    """
+    Every CRAM file contains a SAM header positioned after the first "container block header" which
+    is either raw or gzip compressed.
+
+    This function reads the SAM header and maps the human readable sequence names in it to their
+    numerical identifiers.  The CRAM index file only points to blocks using the numerical identifiers,
+    so this allows us to take a user input of, for example, "chr1,chr2" and map which blocks contain
+    the numerical identifiers of those sequences in the CRAM index file.
+
+    Note: Every @SQ (sequence) tag is ordered and has a required SN (Sequence Name) value and possibly
+    optional AN (Alternate Name) values.  These are the human readable names.  The numerical
+    identifier is assigned in order, with a 1-index, assigning 1, 2, 3... etc. up until the
+    number of human readable sequence identifiers.
+
+    See SAM spec for detailed format: http://samtools.github.io/hts-specs/SAMv1.pdf
+    """
+    sequence = {}
+    numerical_seq_id = 0
+    handle = gzip.GzipFile(fileobj=fh) if is_gzipped_block(fh, block_size) else fh
+    try:
+        for line in handle:
+            if b'@SQ' in line:
+                for tag in line.split(b'\t'):
+                    if tag == b'@SQ':
+                        numerical_seq_id += 1
+                    elif tag[:2] in [b'SN', b'AN']:
+                        tag_value = tag[3:]
+                        assert tag_value not in sequence
+                        sequence[tag_value] = numerical_seq_id
+            if fh.tell() > block_size:
+                return sequence, numerical_seq_id
+    except gzip.BadGzipFile:
+        return sequence, numerical_seq_id
+
+
+def is_gzipped_block(fh: io.StringIO, block_size: int) -> bool:
+    """
+    Loops through a search space number of bytes equal to the block_size to see
+    if there is a gzip marker or raw b'@SQ' marker.
+
+    Will return True if a gzip marker b'\x1f\x8b' is found first.
+    Will return False if a raw b'@SQ' marker is found first.
+    Will error if neither is found.
+
+    Return True if a gzip marker is found and seek fh to the index that b'\x1f\x8b' begins at,
+    otherwise False and seek fh to the index that b'@SQ' begins at.
+    """
+    c1 = fh.read(1)
+    bytes_read = 1
+    while bytes_read < block_size:
+        c2 = fh.read(1)
+        bytes_read += 1
+        if c1 == b'\x1f' and c2 == b'\x8b':
+            fh.seek(-2, 1)
+            return True
+        elif c1 == b'@' and c2 == b'S':
+            if fh.read(1) == b'Q':
+                fh.seek(-3, 1)
+                return False
+            else:
+                fh.seek(-1, 1)  # go back one to undo the extra byte we just read
+        else:
+            c1 = copy.copy(c2)
+    # we did not see a gzip marker or a @SQ flag within the search_space.
+    raise SeqMapError('SAM header block markers not found.')
+
+def get_seq_map(crai: str, cram: str) -> Dict[str, int]:
+    crai_indices = get_crai_indices(crai)
+    first_block_size = crai_indices[1].offset
+    with open(cram, "rb") as fh:
+        read_fixed_length_cram_file_definition(fh)
+        read_cram_container_header(fh)
+        # reading the above two should put us pretty close to the start of the SAM header
+        # TODO: Find out why this is not exactly the index location of the SAM header... sigh
+        seq_map, num_seq_names = read_seq_names_from_sam_header(fh, block_size=first_block_size)
+        if not num_seq_names or num_seq_names != len(crai_indices):
+            raise SeqMapError(f'Something went wrong reading the cram header (no seq name mappings determined).')
+    return seq_map
 
 def decode_int32(fh: io.BytesIO) -> int:
     """A CRAM defined 32-bit signed integer type."""

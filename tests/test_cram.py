@@ -164,7 +164,7 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
 
     def run_cram_view_api_with_regions(self, cram, crai):
         for region in self.regions:
-            with self.subTest(f'xsamtools view cram file:// {region}'):
+            with self.subTest(f'xsamtools view cram {cram} {crai} {region}'):
                 stdout, stderr = self.cram_view_with_regions(cram, crai, regions=region)
                 self.assertEqual(stdout, self.regions[region]['expected_output'])
 
@@ -172,7 +172,7 @@ class TestCram(SuppressWarningsMixin, unittest.TestCase):
             # we still need to test them but...
             # TODO: make a better test for these
             for subregion in ['1', '10', '3-100']:
-                with self.subTest(f'xsamtools view cram file:// {region}:{subregion}'):
+                with self.subTest(f'xsamtools view cram {cram} {crai} {region}:{subregion}'):
                     stdout, stderr = self.cram_view_with_regions(cram, crai, regions=f'{region}:{subregion}')
                     self.assertEqual(stdout, self.regions[region]['expected_output'])
 

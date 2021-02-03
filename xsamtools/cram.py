@@ -13,12 +13,17 @@ import io
 
 from collections import namedtuple
 from tempfile import TemporaryDirectory
-from typing import Optional, Dict, Any, Union, Tuple
+from typing import Optional, Dict, Any, Union, Tuple, List
 from urllib.request import urlretrieve
 from terra_notebook_utils import xprofile
 
 from xsamtools import gs_utils
 from xsamtools.utils import run
+
+try:
+    from gzip import BadGzipFile  # Only on newer versions (py3.8+)
+except ImportError:
+    BadGzipFile = OSError  # Old error that was used
 
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
@@ -134,7 +139,7 @@ def read_seq_names_from_sam_header(fh, block_size: int) -> Tuple[Dict[str, int],
                         sequence[tag_value] = numerical_seq_id
             if fh.tell() > block_size:
                 return sequence, numerical_seq_id
-    except gzip.BadGzipFile:
+    except BadGzipFile:
         return sequence, numerical_seq_id
 
 
@@ -169,17 +174,20 @@ def is_gzipped_block(fh: io.StringIO, block_size: int) -> bool:
     # we did not see a gzip marker or a @SQ flag within the search_space.
     raise SeqMapError('SAM header block markers not found.')
 
-def get_seq_map(crai: str, cram: str) -> Dict[str, int]:
-    crai_indices = get_crai_indices(crai)
+def get_seq_map(cram: str, crai_indices: List[CramLocation]) -> Dict[str, int]:
     first_block_size = crai_indices[1].offset
-    with open(cram, "rb") as fh:
-        read_fixed_length_cram_file_definition(fh)
-        read_cram_container_header(fh)
-        # reading the above two should put us pretty close to the start of the SAM header
-        # TODO: Find out why this is not exactly the index location of the SAM header... sigh
-        seq_map, num_seq_names = read_seq_names_from_sam_header(fh, block_size=first_block_size)
-        if not num_seq_names or num_seq_names != len(crai_indices):
-            raise SeqMapError(f'Something went wrong reading the cram header (no seq name mappings determined).')
+
+    # download the cram header contents
+    blob = gs_utils._blob_for_url(cram)
+    fh = io.BytesIO(blob.download_as_bytes(start=0, end=first_block_size, raw_download=False, checksum=None))
+
+    read_fixed_length_cram_file_definition(fh)
+    read_cram_container_header(fh)
+    # reading the above two should put us pretty close to the start of the SAM header
+    # TODO: Find out why this is not exactly the index location of the SAM header... sigh
+    seq_map, num_seq_names = read_seq_names_from_sam_header(fh, block_size=first_block_size)
+    if num_seq_names != len(crai_indices):
+        raise SeqMapError('Something went wrong reading the cram header (seq name mappings do not match crai index).')
     return seq_map
 
 def decode_int32(fh: io.BytesIO) -> int:
@@ -444,7 +452,53 @@ def download_full_gs(gs_path: str, output_filename: str = None) -> str:
     output_filename = output_filename if output_filename else os.path.abspath(os.path.basename(key_name))
     blob = gs_utils._blob_for_url(gs_path)
     blob.download_to_filename(output_filename)
-    log.debug(f'Entire file "{gs_path}" downloaded to: {output_filename}')
+    log.debug(f'Entire file {gs_path} downloaded to: {output_filename}')
+    return output_filename
+
+def ordered_slices_from_seq_map(seq_names, crai_indices):
+    log.debug(f'{seq_names}')
+    log.debug(f'{crai_indices}')
+    slices = []
+    slice_start = 0
+    for i, crai_line in enumerate(crai_indices):
+        if not slices or crai_line.chr in seq_names:
+            slices.append((slice_start, crai_line.offset))
+        slice_start = crai_line.offset
+
+    if slices[-1][1] != slice_start:
+        slices.append((slice_start, None))
+    else:
+        slices[-1] = (slices[-1][0], None)
+    log.debug(f'{slices}')
+    return slices
+
+def download_sliced_cram(cram_gs_path: str,
+                         crai_local_path: str,
+                         regions: str,
+                         output_filename: str = None) -> str:
+    crai_indices = get_crai_indices(crai_local_path)
+    seq_map = get_seq_map(cram_gs_path, crai_indices)
+
+    sequence_integer_references = []
+    for region in regions.split(','):
+        seq_name = region.split(':')[0].encode('utf-8')
+        if seq_name in seq_map:
+            sequence_integer_references.append(seq_map[seq_name])
+
+    ordered_slices = ordered_slices_from_seq_map(sequence_integer_references, crai_indices)
+    download_sliced_gs(cram_gs_path, ordered_slices, output_filename)
+
+def download_sliced_gs(gs_path: str, ordered_slices: List[Tuple[int, int]], output_filename: str = None):
+    # TODO: use gs_chunked_io instead
+    output_filename = output_filename if output_filename else gs_path[len('gs://'):].split('/', 1)[-1]
+    blob = gs_utils._blob_for_url(gs_path)
+    with open(output_filename, "wb") as f:
+        for start, end in ordered_slices:
+            # TODO: google raises google.resumable_media.common.DataCorruption when checksumming (erroneously?)
+            new_string = blob.download_as_bytes(start=start, end=end, raw_download=False, checksum=None)
+            f.seek(start)
+            f.write(new_string)
+    log.debug(f'Sliced file "{gs_path}" downloaded to: {output_filename}')
     return output_filename
 
 def format_and_check_cram(cram: str) -> str:
@@ -466,7 +520,6 @@ def write_final_file_with_samtools(cram: str,
     if crai:
         crai_arg = f'-X {crai}'
     else:
-        log.warning('No crai file present, this may take a while.')
         crai_arg = ''
 
     # we can get away with a simple split on spaces here because there's nothing complicated going on
@@ -506,20 +559,26 @@ def view(cram: str,
          crai: Optional[str],
          regions: Optional[str],
          output: Optional[str] = None,
-         cram_format: bool = True) -> str:
+         cram_format: bool = True,
+         slicing: bool = True) -> str:
     output = output or timestamped_filename(cram_format)
     output = output[len('file://'):] if output.startswith('file://') else output
     assert ':' not in output, f'Unsupported schema for output: "{output}".\n' \
                               f'Only local file outputs are currently supported.'
 
     with TemporaryDirectory() as staging_dir:
-        staged_cram = os.path.join(staging_dir, 'tmp.cram')
-        stage(uri=cram, output=staged_cram)
         if crai:
             staged_crai = os.path.join(staging_dir, 'tmp.crai')
             stage(uri=crai, output=staged_crai)
         else:
+            log.warning('No crai file specified, this may take a long time.')
             staged_crai = None
+
+        staged_cram = os.path.join(staging_dir, 'tmp.cram')
+        if cram.startswith('gs://') and regions and slicing and staged_crai:
+            download_sliced_cram(cram, staged_crai, regions, output_filename=staged_cram)
+        else:
+            stage(uri=cram, output=staged_cram)
 
         write_final_file_with_samtools(staged_cram, staged_crai, regions, cram_format, output)
 

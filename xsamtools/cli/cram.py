@@ -18,12 +18,13 @@ cram_cli = dispatch.group("cram")
                    required=False,
                    help="Input crai file. This can be a Google Storage file (e.g. gs://bucket/key) or a local file.  "
                         "If not specified, one will be generated for you (this may take a long time)."),
-    "--no_slice": dict(action='store_true',
-                       required=False,
-                       default=True,
-                       help="When acting upon cloud cram files, this will download whole files rather than attempting "
-                            "to only download the 'slices' of those files that corresponding to the --regions "
-                            "argument (slicing saves I/O and therefore time)."),
+    "--no-slicing": dict(action='store_true',
+                         dest='no_slicing',
+                         required=False,
+                         default=False,
+                         help="When acting upon cloud cram files, this will download whole files rather than "
+                              "attempting to only download the 'slices' of those files that corresponding to "
+                              "the --regions argument (slicing saves I/O and therefore time)."),
     # TODO: add an argument to intake a BED file.
     "--regions": dict(type=str,
                       required=False,
@@ -44,4 +45,4 @@ def view(args: argparse.Namespace):
     A limited wrapper around "samtools view", but with functions to operate on google cloud bucket keys.
     """
     cram.view(cram=args.cram, crai=args.crai, regions=args.regions, output=args.output, cram_format=args.C,
-              no_slice=args.no_slice)
+              slicing=not args.no_slicing)

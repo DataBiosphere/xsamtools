@@ -438,7 +438,7 @@ def decode_itf8_array(handle: io.BytesIO, size: Optional[int] = None):
         size = decode_itf8(handle)
     return [decode_itf8(handle) for _ in range(size)]
 
-def get_crai_indices(crai) -> List[CramLocation]:
+def get_crai_indices(crai: str) -> List[CramLocation]:
     crai_indices = []
     with open(crai, "rb") as fh:
         with gzip.GzipFile(fileobj=fh) as gzip_reader:

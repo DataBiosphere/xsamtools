@@ -23,7 +23,7 @@ from xsamtools.utils import run
 try:
     from gzip import BadGzipFile  # Only on newer versions (py3.8+)
 except ImportError:
-    BadGzipFile = OSError  # Old error that was used
+    BadGzipFile = OSError  # type: ignore
 
 CramLocation = namedtuple("CramLocation", "chr alignment_start alignment_span offset slice_offset slice_size")
 log = logging.getLogger(__name__)
@@ -141,6 +141,7 @@ def read_seq_names_from_sam_header(fh, block_size: int) -> Tuple[Dict[str, int],
                 return sequence, numerical_seq_id
     except BadGzipFile:
         return sequence, numerical_seq_id
+    return sequence, numerical_seq_id  # it's unlikely we get to here
 
 
 def is_gzipped_block(fh: io.StringIO, block_size: int) -> bool:
@@ -455,10 +456,10 @@ def download_full_gs(gs_path: str, output_filename: str = None) -> str:
     log.debug(f'Entire file {gs_path} downloaded to: {output_filename}')
     return output_filename
 
-def ordered_slices_from_seq_map(seq_names, crai_indices):
+def ordered_slices_from_seq_map(seq_names, crai_indices) -> List[Tuple[int, Optional[int]]]:
     log.debug(f'{seq_names}')
     log.debug(f'{crai_indices}')
-    slices = []
+    slices: List[Tuple[int, Optional[int]]] = []
     slice_start = 0
     for i, crai_line in enumerate(crai_indices):
         if not slices or crai_line.chr in seq_names:
@@ -475,7 +476,7 @@ def ordered_slices_from_seq_map(seq_names, crai_indices):
 def download_sliced_cram(cram_gs_path: str,
                          crai_local_path: str,
                          regions: str,
-                         output_filename: str = None) -> str:
+                         output_filename: str = None) -> None:
     crai_indices = get_crai_indices(crai_local_path)
     seq_map = get_seq_map(cram_gs_path, crai_indices)
 
@@ -483,7 +484,7 @@ def download_sliced_cram(cram_gs_path: str,
     for region in regions.split(','):
         seq_name = region.split(':')[0].encode('utf-8')
         if seq_name in seq_map:
-            sequence_integer_references.append(seq_map[seq_name])
+            sequence_integer_references.append(seq_map[seq_name])  # type: ignore
 
     ordered_slices = ordered_slices_from_seq_map(sequence_integer_references, crai_indices)
     download_sliced_gs(cram_gs_path, ordered_slices, output_filename)

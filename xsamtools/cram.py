@@ -176,17 +176,17 @@ def is_gzipped_block(fh: io.StringIO, block_size: int) -> bool:
     raise SeqMapError('SAM header block markers not found.')
 
 def get_seq_map(cram: str, crai_indices: List[CramLocation]) -> Dict[bytes, int]:
-    first_block_size = crai_indices[1].offset
+    block_size = crai_indices[2].offset
 
     # download the cram header contents
     blob = gs_utils._blob_for_url(cram)
-    fh = io.BytesIO(blob.download_as_bytes(start=0, end=first_block_size, raw_download=False, checksum=None))
+    fh = io.BytesIO(blob.download_as_bytes(start=0, end=block_size, raw_download=False, checksum=None))
 
     read_fixed_length_cram_file_definition(fh)
     read_cram_container_header(fh)
     # reading the above two should put us pretty close to the start of the SAM header
     # TODO: Find out why this is not exactly the index location of the SAM header... sigh
-    seq_map, total_seq_identifiers = read_seq_names_from_sam_header(fh, block_size=first_block_size)
+    seq_map, total_seq_identifiers = read_seq_names_from_sam_header(fh, block_size=block_size)
     if total_seq_identifiers != len(crai_indices):
         raise SeqMapError('Something went wrong reading the cram header (num_seq_names != len(crai_indices)).')
     return seq_map
@@ -453,7 +453,7 @@ def download_full_gs(gs_path: str, output_filename: str = None) -> str:
     output_filename = output_filename if output_filename else os.path.abspath(os.path.basename(key_name))
     blob = gs_utils._blob_for_url(gs_path)
     blob.download_to_filename(output_filename)
-    log.debug(f'Entire file {gs_path} downloaded to: {output_filename}')
+    log.info(f'Entire file {gs_path} downloaded to: {output_filename}')
     return output_filename
 
 def ordered_slices_from_seq_identifiers(seq_identifiers: List[int],
@@ -509,7 +509,7 @@ def download_sliced_gs(gs_path: str, ordered_slices: List[Tuple[int, int]], outp
             new_string = blob.download_as_bytes(start=start, end=end, raw_download=False, checksum=None)
             f.seek(start)
             f.write(new_string)
-    log.debug(f'Sliced file "{gs_path}" downloaded to: {output_filename}')
+    log.info(f'Sliced file "{gs_path}" downloaded to: {output_filename}')
     return output_filename
 
 def format_and_check_cram(cram: str) -> str:
@@ -538,7 +538,7 @@ def write_final_file_with_samtools(cram: str,
 
     log.info(f'Now running: {cmd}')
     run(cmd, stdout=open(output, 'w'), check=True)
-    log.debug(f'Output CRAM successfully generated at: {output}')
+    log.info(f'Output CRAM successfully generated at: {output}')
 
 def stage(uri: str, output: str) -> None:
     """

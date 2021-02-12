@@ -11,6 +11,7 @@ Installation requires a C toolchain. Typically Ubuntu/Debian systems should have
   - `libbz2-dev`
   - `liblzma-dev`
   - `libcurl4-openssl-dev`
+  - `libncurses5-dev`
 
 `libcurl4-openssl-dev` may be omitted at the cost of some cloud support features in htslib.
 

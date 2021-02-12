@@ -51,7 +51,7 @@ for cram_gs_path, crai_gs_path in cram_crai_pairs:
                 print(f'Now running: {cram_uri} {crai_uri} {region} w/slicing={slicing_bool}')
                 start = time.time()
                 cram_output = cram.view(cram=cram_uri, crai=crai_uri, regions=region, cram_format=True,
-                                        slice_cloud_files=slicing_bool)
+                                        slicing=slicing_bool)
                 end = time.time()
                 print(f'Timing was {(end - start) / 60} minutes.')
                 print('=' * 40)

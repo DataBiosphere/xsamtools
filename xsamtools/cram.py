@@ -469,7 +469,7 @@ def ordered_slices_from_seq_identifiers(seq_identifiers: List[int],
     """
     slices: List[Tuple[int, Optional[int]]] = []
     slice_start = 0
-    for i, crai_line in enumerate(crai_indices):
+    for crai_line in crai_indices:
         if not slices or crai_line.chr in seq_identifiers:
             slices.append((slice_start, crai_line.offset))
         slice_start = crai_line.offset

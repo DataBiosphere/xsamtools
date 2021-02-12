@@ -188,7 +188,11 @@ def get_seq_map(cram: str, crai_indices: List[CramLocation]) -> Dict[bytes, int]
     # TODO: Find out why this is not exactly the index location of the SAM header... sigh
     seq_map, total_seq_identifiers = read_seq_names_from_sam_header(fh, block_size=block_size)
     if total_seq_identifiers != len(crai_indices):
-        raise SeqMapError('Something went wrong reading the cram header (num_seq_names != len(crai_indices)).')
+        raise SeqMapError(f'Something went wrong reading the cram header (total_seq_identifiers != len(crai_indices)).\n'
+                          f'total_seq_identifiers: {total_seq_identifiers}\n'
+                          f'seq_map: {seq_map}\n'
+                          f'len(crai_indices): {len(crai_indices)}\n'
+                          f'{crai_indices}\n')
     return seq_map
 
 def decode_int32(fh: io.BytesIO) -> int:

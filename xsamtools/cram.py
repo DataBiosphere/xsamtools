@@ -107,7 +107,7 @@ def read_cram_container_header(fh: io.BytesIO) -> Dict[str, Any]:
         "crc_hash": fh.read(4)
     }
 
-def read_seq_names_from_sam_header(fh, block_size: int) -> Tuple[Dict[str, int], int]:
+def read_seq_names_from_sam_header(fh, block_size: int) -> Tuple[Dict[bytes, int], int]:
     """
     Every CRAM file contains a SAM header positioned after the first "container block header" which
     is either raw or gzip compressed.
@@ -125,23 +125,23 @@ def read_seq_names_from_sam_header(fh, block_size: int) -> Tuple[Dict[str, int],
     See SAM spec for detailed format: http://samtools.github.io/hts-specs/SAMv1.pdf
     """
     sequence = {}
-    numerical_seq_id = 0
+    total_seq_identifiers = 0
     handle = gzip.GzipFile(fileobj=fh) if is_gzipped_block(fh, block_size) else fh
     try:
         for line in handle:
             if b'@SQ' in line:
                 for tag in line.split(b'\t'):
                     if tag == b'@SQ':
-                        numerical_seq_id += 1
+                        total_seq_identifiers += 1
                     elif tag[:2] in [b'SN', b'AN']:
                         tag_value = tag[3:]
                         assert tag_value not in sequence
-                        sequence[tag_value] = numerical_seq_id
+                        sequence[tag_value] = total_seq_identifiers
             if fh.tell() > block_size:
-                return sequence, numerical_seq_id
+                return sequence, total_seq_identifiers
     except BadGzipFile:
-        return sequence, numerical_seq_id
-    return sequence, numerical_seq_id  # it's unlikely we get to here
+        return sequence, total_seq_identifiers
+    return sequence, total_seq_identifiers  # it's unlikely we get to here
 
 
 def is_gzipped_block(fh: io.StringIO, block_size: int) -> bool:
@@ -175,7 +175,7 @@ def is_gzipped_block(fh: io.StringIO, block_size: int) -> bool:
     # we did not see a gzip marker or a @SQ flag within the search_space.
     raise SeqMapError('SAM header block markers not found.')
 
-def get_seq_map(cram: str, crai_indices: List[CramLocation]) -> Dict[str, int]:
+def get_seq_map(cram: str, crai_indices: List[CramLocation]) -> Dict[bytes, int]:
     first_block_size = crai_indices[1].offset
 
     # download the cram header contents
@@ -186,9 +186,9 @@ def get_seq_map(cram: str, crai_indices: List[CramLocation]) -> Dict[str, int]:
     read_cram_container_header(fh)
     # reading the above two should put us pretty close to the start of the SAM header
     # TODO: Find out why this is not exactly the index location of the SAM header... sigh
-    seq_map, num_seq_names = read_seq_names_from_sam_header(fh, block_size=first_block_size)
-    if num_seq_names != len(crai_indices):
-        raise SeqMapError('Something went wrong reading the cram header (seq name mappings do not match crai index).')
+    seq_map, total_seq_identifiers = read_seq_names_from_sam_header(fh, block_size=first_block_size)
+    if total_seq_identifiers != len(crai_indices):
+        raise SeqMapError('Something went wrong reading the cram header (num_seq_names != len(crai_indices)).')
     return seq_map
 
 def decode_int32(fh: io.BytesIO) -> int:
@@ -438,11 +438,11 @@ def decode_itf8_array(handle: io.BytesIO, size: Optional[int] = None):
         size = decode_itf8(handle)
     return [decode_itf8(handle) for _ in range(size)]
 
-def get_crai_indices(crai):
+def get_crai_indices(crai) -> List[CramLocation]:
     crai_indices = []
     with open(crai, "rb") as fh:
         with gzip.GzipFile(fileobj=fh) as gzip_reader:
-            with io.TextIOWrapper(gzip_reader, encoding='ascii') as reader:
+            with io.TextIOWrapper(gzip_reader, encoding='ascii') as reader:  # type: ignore
                 for line in reader:
                     crai_indices.append(CramLocation(*[int(d) for d in line.split("\t")]))
     return crai_indices
@@ -456,27 +456,36 @@ def download_full_gs(gs_path: str, output_filename: str = None) -> str:
     log.debug(f'Entire file {gs_path} downloaded to: {output_filename}')
     return output_filename
 
-def ordered_slices_from_seq_map(seq_names, crai_indices) -> List[Tuple[int, Optional[int]]]:
-    log.debug(f'{seq_names}')
-    log.debug(f'{crai_indices}')
+def ordered_slices_from_seq_identifiers(seq_identifiers: List[int],
+                                        crai_indices: List[CramLocation]) -> List[Tuple[int, Optional[int]]]:
+    """
+    crai_indices is a list of all blocks in a cram file.  Each block's contents are referenced by a seq_identifier
+    ("chr"), and contain that block's start position in the file as an absolute index ("offset").
+
+    Given a list of these seq_identifiers, return a list of tuples representing absolute start and end indices for
+    blocks we're interested in.
+
+    Note: The first and last block are always included.
+    """
     slices: List[Tuple[int, Optional[int]]] = []
     slice_start = 0
     for i, crai_line in enumerate(crai_indices):
-        if not slices or crai_line.chr in seq_names:
+        if not slices or crai_line.chr in seq_identifiers:
             slices.append((slice_start, crai_line.offset))
         slice_start = crai_line.offset
 
-    if slices[-1][1] != slice_start:
-        slices.append((slice_start, None))
-    else:
-        slices[-1] = (slices[-1][0], None)
-    log.debug(f'{slices}')
+    # always include the last block of the file, and make sure it always ends in "None"
+    slices.append((slice_start, None))  # "None" signals a read to the very end of the file
     return slices
 
 def download_sliced_cram(cram_gs_path: str,
                          crai_local_path: str,
                          regions: str,
                          output_filename: str = None) -> None:
+    """
+    Given a cram, crai, and a set of regions, download only the sections of that cram file that correspond to
+    the first block, all relevant region blocks, & the final block, and write them into an output file.
+    """
     crai_indices = get_crai_indices(crai_local_path)
     seq_map = get_seq_map(cram_gs_path, crai_indices)
 
@@ -484,12 +493,13 @@ def download_sliced_cram(cram_gs_path: str,
     for region in regions.split(','):
         seq_name = region.split(':')[0].encode('utf-8')
         if seq_name in seq_map:
-            sequence_integer_references.append(seq_map[seq_name])  # type: ignore
+            sequence_integer_references.append(seq_map[seq_name])
 
-    ordered_slices = ordered_slices_from_seq_map(sequence_integer_references, crai_indices)
+    ordered_slices = ordered_slices_from_seq_identifiers(sequence_integer_references, crai_indices)
     download_sliced_gs(cram_gs_path, ordered_slices, output_filename)
 
 def download_sliced_gs(gs_path: str, ordered_slices: List[Tuple[int, int]], output_filename: str = None):
+    """Given a gs:// path, download only referenced slices, and write them into output_filename."""
     # TODO: use gs_chunked_io instead
     output_filename = output_filename if output_filename else gs_path[len('gs://'):].split('/', 1)[-1]
     blob = gs_utils._blob_for_url(gs_path)
@@ -562,6 +572,7 @@ def view(cram: str,
          output: Optional[str] = None,
          cram_format: bool = True,
          slicing: bool = True) -> str:
+    """A limited wrapper around "samtools view", but with functions to operate on google cloud bucket keys."""
     output = output or timestamped_filename(cram_format)
     output = output[len('file://'):] if output.startswith('file://') else output
     assert ':' not in output, f'Unsupported schema for output: "{output}".\n' \
@@ -572,7 +583,7 @@ def view(cram: str,
             staged_crai = os.path.join(staging_dir, 'tmp.crai')
             stage(uri=crai, output=staged_crai)
         else:
-            log.warning('No crai file specified, this may take a long time.')
+            log.warning('No crai file specified, this may take a long long time.')
             staged_crai = None
 
         staged_cram = os.path.join(staging_dir, 'tmp.cram')

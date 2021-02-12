@@ -10,8 +10,8 @@ from xsamtools import cram  # noqa
 
 
 cram_crai_pairs = [
-    ('gs://lons-test/NWD938777.b38.irc.v1.cram', 'gs://lons-test/NWD938777.b38.irc.v1.cram.crai')
-    # ('gs://lons-test/ce#5b.cram', 'gs://lons-test/ce#5b.cram.crai')
+    ('gs://lons-test/NWD938777.b38.irc.v1.cram', 'gs://lons-test/NWD938777.b38.irc.v1.cram.crai'),
+    ('gs://lons-test/ce#5b.cram', 'gs://lons-test/ce#5b.cram.crai')
 ]
 
 os.makedirs(os.path.join(pkg_root, 'test-cram-slicing'), exist_ok=True)

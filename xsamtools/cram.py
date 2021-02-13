@@ -187,7 +187,8 @@ def get_seq_map(cram: str, crai_indices: List[CramLocation]) -> Dict[bytes, int]
     # reading the above two should put us pretty close to the start of the SAM header
     # TODO: Find out why this is not exactly the index location of the SAM header... sigh
     seq_map, total_seq_identifiers = read_seq_names_from_sam_header(fh, block_size=block_size)
-    if total_seq_identifiers != len(crai_indices):
+    if total_seq_identifiers > len(crai_indices) or total_seq_identifiers == 0:
+        # TODO: crai_indices may have duplicates; make this exact (==) ^
         raise SeqMapError(f'Something went wrong reading the cram header (total_seq_identifiers != len(crai_indices)).\n'
                           f'total_seq_identifiers: {total_seq_identifiers}\n'
                           f'seq_map: {seq_map}\n'
@@ -474,12 +475,13 @@ def ordered_slices_from_seq_identifiers(seq_identifiers: List[int],
     slices: List[Tuple[int, Optional[int]]] = []
     slice_start = 0
     for crai_line in crai_indices:
-        if not slices or crai_line.chr in seq_identifiers:
+        if not slices or crai_line.chr in seq_identifiers or crai_line.chr == -1:
             slices.append((slice_start, crai_line.offset))
         slice_start = crai_line.offset
 
     # always include the last block of the file, and make sure it always ends in "None"
     slices.append((slice_start, None))  # "None" signals a read to the very end of the file
+    # TODO: Join like ends together to optimize
     return slices
 
 def download_sliced_cram(cram_gs_path: str,
@@ -592,7 +594,13 @@ def view(cram: str,
 
         staged_cram = os.path.join(staging_dir, 'tmp.cram')
         if cram.startswith('gs://') and regions and slicing and staged_crai:
+            # try:
             download_sliced_cram(cram, staged_crai, regions, output_filename=staged_cram)
+            # except Exception as e:
+            #     log.warning(f'Slicing failed with:'
+            #                 f'\n{e}\n'
+            #                 f'Now making attempt without slicing.')
+            #     stage(uri=cram, output=staged_cram)
         else:
             stage(uri=cram, output=staged_cram)
 

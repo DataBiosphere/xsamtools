@@ -3,7 +3,7 @@
 SHELL=/bin/bash -eo pipefail
   
 ifndef XSAMTOOLS_HOME
-$(error Please run "source environment" in the xvcfmerge repo root directory before running make commands)
+$(error Please run "source environment" in the xsamtools repo root directory before running make commands)
 endif
 
 release_major:

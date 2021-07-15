@@ -57,6 +57,12 @@ class Install(install.install):
                       f"libexecdir={libdir}",
                       "INSTALL_MAN=:",
                       "install"], cwd="build/bcftools")
+                _run(["make",
+                      f"bindir={bindir}",
+                      f"libdir={libdir}",
+                      f"libexecdir={libdir}",
+                      "INSTALL_MAN=:",
+                      "install"], cwd="build/samtools")
             except subprocess.CalledProcessError:
                 print("Failed to package htslib/bcftools")
                 traceback.print_exc()
@@ -99,7 +105,7 @@ setup(
     author_email='bhannafi@ucsc.edu',
     license='MIT',
     packages=find_packages(exclude=['tests']),
-    scripts=glob.glob('scripts/*'),
+    entry_points=dict(console_scripts=['xsamtools=xsamtools.cli.main:main']),
     zip_safe=False,
     install_requires=install_requires,
     platforms=['MacOS X', 'Posix'],

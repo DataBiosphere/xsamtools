@@ -37,4 +37,5 @@ def view(args: argparse.Namespace):
     """
     A limited wrapper around "samtools view", but with functions to operate on google cloud bucket keys.
     """
-    cram.view(cram=args.cram, crai=args.crai, regions=args.regions, output=args.output, cram_format=args.C)
+    cram.view2(args.cram)
+    # cram.view(cram=args.cram, crai=args.crai, regions=args.regions, output=args.output, cram_format=args.C)

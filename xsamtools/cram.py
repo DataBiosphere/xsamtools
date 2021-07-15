@@ -388,7 +388,8 @@ def write_final_file_with_samtools(cram: str,
     cmd = f'samtools view {cram_format_arg} {cram} {crai_arg} {region_args}'.split()
 
     log.info(f'Now running: {cmd}')
-    run(cmd, stdout=open(output, 'w'), check=True)
+    with open(output, 'w') as fh:
+        run(cmd, stdout=fh, check=True)
     log.debug(f'Output CRAM successfully generated at: {output}')
 
 def stage(uri: str, output: str) -> None:
@@ -439,3 +440,18 @@ def view(cram: str,
         write_final_file_with_samtools(staged_cram, staged_crai, regions, cram_format, output)
 
     return output
+
+import subprocess
+from concurrent.futures import ProcessPoolExecutor
+from xsamtools.vcf import _get_reader
+
+def view2(uri: str):
+    with ProcessPoolExecutor() as e:
+        reader = _get_reader(uri, e)
+        try:
+            out_filepath = os.path.join(os.path.dirname(__file__), "doom.cram.crai")
+            cmd = ["samtools", "index", reader.filepath, out_filepath]
+            print(f"running '{' '.join(cmd)}'")
+            subprocess.run(cmd, check=True)
+        finally:
+            reader.close()

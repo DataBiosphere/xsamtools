@@ -11,7 +11,7 @@ def substitute_drs_and_gs_uris_for_http(*args):
         if arg.strip('"').strip("'").startswith('drs://'):
             new_args.append(tnu.drs.access(arg))
         elif args.strip('"').strip("'").startswith('gs://'):
-            new_args.append(tnu.gs.get_signed_url)
+            new_args.append(tnu.gs.get_signed_url(arg))
         else:
             new_args.append(arg)
     return new_args

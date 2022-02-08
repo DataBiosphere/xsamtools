@@ -1,16 +1,32 @@
 #!/usr/bin/env python
 import os
 import sys
+import subprocess
 
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
+from xsamtools.utils import substitute_drs_and_gs_uris_for_http, run
+from xsamtools.samtools import _samtools_binary_path
+
 # imports required here for these command groups to show in the CLI
-import xsamtools.cli.cram
 import xsamtools.cli.vcf
 
 from xsamtools.cli import dispatch
 
 
 if __name__ == "__main__":
-    dispatch(sys.argv[1:])
+    args = sys.argv[1:]
+    xsamtools_parser = dispatch.parser
+
+    # purely added this parser for the help menu so that users know you can use "xsamtools view"
+    subparser_group = xsamtools_parser.add_subparsers(help='Standard samtools sub-commands.')
+    samtools_view_parser = subparser_group.add_parser('view',
+                                                      help='Equivalent of samtools view with all options, but DRS '
+                                                           'and Google URIs can be used in addition to local file '
+                                                           'paths and http(s) (assuming the user has access).')
+    if args[0] == 'view':
+        args = substitute_drs_and_gs_uris_for_http(args)
+        run([_samtools_binary_path('samtools')] + args)
+    else:
+        dispatch(args)

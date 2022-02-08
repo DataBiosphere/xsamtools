@@ -1,6 +1,21 @@
 import subprocess
+import terra_notebook_utils as tnu
 
 from typing import Any
+
+
+def substitute_drs_and_gs_uris_for_http(*args):
+    # TODO: literally input the entire list of exact options for samtools view?
+    new_args = []
+    for arg in args:
+        if arg.strip('"').strip("'").startswith('drs://'):
+            new_args.append(tnu.drs.access(arg))
+        elif args.strip('"').strip("'").startswith('gs://'):
+            # TODO: actually implement this
+            new_args.append(tnu.gs.get_signed_url)
+        else:
+            new_args.append(arg)
+    return new_args
 
 
 def run(cmd: Any, check: bool = True, **kwargs) -> subprocess.CompletedProcess:
@@ -19,6 +34,7 @@ def run(cmd: Any, check: bool = True, **kwargs) -> subprocess.CompletedProcess:
                                               f'\n\n{process.stderr}')
         raise subprocess.CalledProcessError(process.returncode, cmd, process.stdout, process.stderr)
     return process
+
 
 class XSamtoolsCalledProcessError(Exception):
     pass

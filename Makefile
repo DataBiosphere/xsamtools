@@ -1,7 +1,7 @@
 include common.mk
 
 MODULES=xsamtools tests
-SAMTOOLS_VERSION=1.10
+SAMTOOLS_VERSION=1.14
 
 export TNU_TESTMODE?=workspace_access
 
@@ -26,13 +26,13 @@ samtools.tar.bz2:
 	rm -rf samtools
 
 htslib.tar.bz2:
-	git clone --depth 1 -b xbrianh-readers-idx https://github.com/xbrianh/htslib
+	git clone --depth 1 -b $(SAMTOOLS_VERSION) https://github.com/samtools/htslib.git
 	(cd htslib ; rm -rf .git ; autoheader && autoconf)
 	tar cjf htslib.tar.bz2 htslib
 	rm -rf htslib
 
 bcftools.tar.bz2:
-	git clone --depth 1 -b xbrianh-no-index https://github.com/xbrianh/bcftools
+	git clone --depth 1 -b $(SAMTOOLS_VERSION) https://github.com/samtools/bcftools.git
 	(cd bcftools ; rm -rf .git)
 	tar cjf bcftools.tar.bz2 bcftools
 	rm -rf bcftools

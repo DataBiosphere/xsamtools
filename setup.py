@@ -23,11 +23,11 @@ class BuildPy(build_py.build_py):
                 _run(["tar", "xjf", "htslib.tar.bz2", "-C", "build"])
                 _run(["tar", "xjf", "bcftools.tar.bz2", "-C", "build"])
                 _run(["tar", "xjf", "samtools.tar.bz2", "-C", "build"])
-                _run(["./configure"], cwd="build/htslib")
-                _run(["./configure"], cwd="build/samtools")
-                _run(["make"], cwd="build/htslib")
-                _run(["make"], cwd="build/bcftools")
-                _run(["make"], cwd="build/samtools")
+                _run(["./configure"], cwd="build/htslib-1.14")
+                _run(["./configure"], cwd="build/samtools-1.14")
+                _run(["make"], cwd="build/htslib-1.14")
+                _run(["make"], cwd="build/bcftools-1.14")
+                _run(["make"], cwd="build/samtools-1.14")
             except subprocess.CalledProcessError:
                 print("Failed to build samtools/htslib/bcftools:")
                 traceback.print_exc()
@@ -50,13 +50,13 @@ class Install(install.install):
                       f"libexecdir={libdir}",
                       f"datarootdir={datadir}",
                       "INSTALL_MAN=:",
-                      "install"], cwd="build/htslib")
+                      "install"], cwd="build/htslib-1.14")
                 _run(["make",
                       f"bindir={bindir}",
                       f"libdir={libdir}",
                       f"libexecdir={libdir}",
                       "INSTALL_MAN=:",
-                      "install"], cwd="build/bcftools")
+                      "install"], cwd="build/bcftools-1.14")
             except subprocess.CalledProcessError:
                 print("Failed to package htslib/bcftools")
                 traceback.print_exc()

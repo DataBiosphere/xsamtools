@@ -17,7 +17,7 @@ Installation requires a C toolchain. Typically Ubuntu/Debian systems should have
 
 # Usage
 
-After succesful installation, the following executables are available:
+After successful installation, the following executables are available:
 
 samtools:
   - htsfile

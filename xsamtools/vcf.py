@@ -14,13 +14,14 @@ from xsamtools import pipes, vcf, samtools, gs_utils
 
 cores_available = cpu_count()
 
-def _merge(input_filepaths: Sequence[str], output_filepath: str):
+def _merge(input_filepaths: Sequence[str], output_filepath: str, *args):
     subprocess.run([samtools.paths['bcftools'],
                     "merge",
                     "--no-index",
                     "-o", output_filepath,
                     "-O", "z",
-                    "--threads", f"{2 * cores_available}"]
+                    "--threads", f"{2 * cores_available}",
+                    *args]
                    + [fp for fp in input_filepaths],
                    check=True)
 
@@ -45,14 +46,14 @@ def _stats(input_filepath: str):
                    check=True)
 
 @xprofile.profile("combine")
-def combine(src_files: Sequence[str], output_file: str):
+def combine(src_files: Sequence[str], output_file: str, *args):
     assert samtools.paths['bcftools']
     gs_utils._assert_access(src_files, [output_file])
     with ProcessPoolExecutor(max_workers=len(src_files) + 1) as e:
         readers = [_get_reader(fp, e) for fp in src_files]
         writer = _get_writer(output_file, e)
         try:
-            _merge([r.filepath for r in readers], writer.filepath)
+            _merge([r.filepath for r in readers], writer.filepath, *args)
         finally:
             for reader in readers:
                 reader.close()

@@ -11,6 +11,10 @@ vcf_cli = dispatch.group("vcf")
 
 
 @vcf_cli.command("merge", arguments={
+    "--force-samples": dict(action="store_true",
+                            help="resolve duplicate sample names"),
+    "--print-header": dict(action="store_true",
+                           help="print only the merged header and exit"),
     "--inputs": dict(type=str,
                      required=True,
                      help="Input VCFs. These can be Google Storage objects if prefixed with 'gs://'"),
@@ -28,7 +32,12 @@ def merge(args: argparse.Namespace):
     --output "combined.vcf.gz"
     """
     inputs = args.inputs.split(",")
-    vcf.combine(inputs, args.output)
+    extra_args = []
+    if args.force_samples:
+        extra_args.append('--force-samples')
+    if args.print_header:
+        extra_args.append('--print-header')
+    vcf.combine(inputs, args.output, *extra_args)
 
 @vcf_cli.command("subsample", arguments={
     "--input": dict(type=str,

@@ -52,4 +52,4 @@ chromosome or the merge will fail.
 # Docker
 
 A Docker image with xsamtools installed is published at
-[https://hub.docker.com/repository/docker/xbrianh/xsamtools](https://hub.docker.com/repository/docker/xbrianh/xsamtools)
+[https://hub.docker.com/r/xbrianh/xsamtools](https://hub.docker.com/r/xbrianh/xsamtools)

@@ -1,3 +1,5 @@
+# Changes for v0.5.4 (2022-04-14)
+
 # Changes for v0.5.3 (2022-04-13)
 Update README.md (#98)
 Add options for --force-samples and --print-header (#97)

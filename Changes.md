@@ -1,3 +1,6 @@
+# Changes for v0.5.8 (2022-04-15)
+Fix how version info is stored
+
 # Changes for v0.5.7 (2022-04-15)
 
 # Changes for v0.5.6 (2022-04-15)

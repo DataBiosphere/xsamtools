@@ -26,7 +26,7 @@ release: clean
 	    echo "# Changes for ${TAG} ($$(date +%Y-%m-%d))" > $$TAG_MSG; \
 	    git log --pretty=format:%s $$(git describe --abbrev=0)..HEAD >> $$TAG_MSG; \
 	    $${EDITOR:-vi} $$TAG_MSG; \
-	    echo ${TAG} | sed 's/v\(.*\)/\1/' > xsamtools/version.py; git add xsamtools/version.py; \
+	    echo ${TAG} | sed 's/v\(.*\)/__version__ = "\1"\n/' > xsamtools/version.py; git add xsamtools/version.py; \
 	    if [[ -f Changes.md ]]; then cat $$TAG_MSG <(echo) Changes.md | sponge Changes.md; git add Changes.md; fi; \
 	    if [[ -f Changes.rst ]]; then cat <(pandoc --from markdown --to rst $$TAG_MSG) <(echo) Changes.rst | sponge Changes.rst; git add Changes.rst; fi; \
 	    git commit -m ${TAG}; \

@@ -1,3 +1,6 @@
+# Changes for v0.5.9 (2022-04-18)
+Include xsamtools so that we can have a functioning release
+
 # Changes for v0.5.8 (2022-04-15)
 Fix how version info is stored
 

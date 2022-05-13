@@ -1,6 +1,4 @@
-import io
 import os
-from uuid import uuid4
 from multiprocessing import cpu_count
 from tempfile import NamedTemporaryFile
 import subprocess
@@ -9,7 +7,7 @@ from typing import Union, Sequence
 
 from terra_notebook_utils import xprofile
 
-from xsamtools import pipes, vcf, samtools, gs_utils
+from xsamtools import pipes, samtools, gs_utils
 
 
 cores_available = cpu_count()

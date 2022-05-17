@@ -23,11 +23,11 @@ def subsample(args: argparse.Namespace, extra_args):
     """
     Subsample VCF a stored locally or in google bucket.
     """
-    vcf.subsample(args.input, args.output, args.samples.split(","))
+    vcf.subsample(args.input, args.output, args.samples.split(","), *extra_args)
 
 
 def stats(args: argparse.Namespace, extra_args):
     """
     Statistics for VCF stored locally or in google bucket.
     """
-    vcf.stats(args.input)
+    vcf.stats(args.input, *extra_args)

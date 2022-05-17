@@ -23,7 +23,7 @@ def _merge(input_filepaths: Sequence[str], output_filepath: str, *args):
                    + [fp for fp in input_filepaths],
                    check=True)
 
-def _view(input_filepath: str, output_filepath: str, samples: Sequence[str]):
+def _view(input_filepath: str, output_filepath: str, samples: Sequence[str], *args):
     with NamedTemporaryFile() as tf:
         with open(tf.name, "w") as fh:
             fh.write(os.linesep.join(samples))
@@ -33,13 +33,15 @@ def _view(input_filepath: str, output_filepath: str, samples: Sequence[str]):
                         "-O", "z",
                         "-S", tf.name,
                         "--threads", f"{2 * cores_available}",
+                        *args,
                         input_filepath],
                        check=True)
 
-def _stats(input_filepath: str):
+def _stats(input_filepath: str, *args):
     subprocess.run([samtools.paths['bcftools'],
                     "stats",
                     "--threads", f"{2 * cores_available}",
+                    *args,
                     input_filepath],
                    check=True)
 
@@ -58,25 +60,25 @@ def combine(src_files: Sequence[str], output_file: str, *args):
             writer.close()
 
 @xprofile.profile("subsample")
-def subsample(src_path: str, dst_path: str, samples):
+def subsample(src_path: str, dst_path: str, samples, *args):
     assert samtools.paths['bcftools']
     gs_utils._assert_access([src_path], [dst_path])
     with ProcessPoolExecutor(max_workers=2) as e:
         reader = _get_reader(src_path, e)
         writer = _get_writer(dst_path, e)
         try:
-            _view(reader.filepath, writer.filepath, samples)
+            _view(reader.filepath, writer.filepath, samples, *args)
         finally:
             reader.close()
             writer.close()
 
-def stats(src_path: str):
+def stats(src_path: str, *args):
     assert samtools.paths['bcftools']
     gs_utils._assert_access([src_path], [])
     with ProcessPoolExecutor() as e:
         reader = _get_reader(src_path, e)
         try:
-            _stats(reader.filepath)
+            _stats(reader.filepath, *args)
         finally:
             reader.close()
 

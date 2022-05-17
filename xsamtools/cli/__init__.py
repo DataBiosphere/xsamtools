@@ -57,8 +57,9 @@ def add_vcf_subparser(subparsers):
                               help="Output VCF. This can be a Google Storage object if prefixed with 'gs://'")
     merge_parser.set_defaults(func=merge)
 
-    subsample_parser = vcf_subparsers.add_parser('subsample', description="Subsample VCF a stored locally "
-                                                                          "or in google bucket.")
+    subsample_parser = vcf_subparsers.add_parser('subsample', description=("Subsample VCF a stored locally "
+                                                                           "or in google bucket. Additional "
+                                                                           "arguments will be passed on to bcftools"))
     subsample_parser.add_argument("--input", type=str, required=True,
                                   help="Input file. This can be a Google Storage object if prefixed with 'gs://'")
     subsample_parser.add_argument("--output", type=str, required=True,
@@ -66,8 +67,9 @@ def add_vcf_subparser(subparsers):
     subsample_parser.add_argument("--samples", type=str, required=True, help="Comma seperated list of samples")
     subsample_parser.set_defaults(func=subsample)
 
-    stats_parser = vcf_subparsers.add_parser('stats', description="Statistics for VCF stored locally "
-                                                                  "or in google bucket.")
+    stats_parser = vcf_subparsers.add_parser('stats', description=("Statistics for VCF stored locally "
+                                                                   "or in google bucket. Additional arguments "
+                                                                   "will be passed on to bcftools"))
     stats_parser.add_argument("--input", type=str, required=True,
                               help="Input file. This can be a Google Storage object if prefixed with 'gs://'")
     stats_parser.set_defaults(func=stats)

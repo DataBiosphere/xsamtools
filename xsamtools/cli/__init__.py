@@ -1,6 +1,8 @@
 import argparse
+import subprocess
 from textwrap import dedent
 
+from xsamtools import samtools
 from xsamtools.cli.cram import view
 from xsamtools.cli.vcf import merge, subsample, stats
 
@@ -28,20 +30,27 @@ def add_cram_subparser(subparsers):
     view_parser.set_defaults(func=view)
 
 
+def merge_options():
+    # Help returns non-zero exit status for some reason
+    result = subprocess.run([samtools.paths['bcftools'], "merge", "--help"], capture_output=True, check=False)
+    help = result.stderr.decode()
+    _, options = help.split('Options:')
+    return "bcftools merge arguments:" + options
+
+
 def add_vcf_subparser(subparsers):
     vcf_parser = subparsers.add_parser('vcf')
     vcf_subparsers = vcf_parser.add_subparsers()
-    merge_parser = vcf_subparsers.add_parser('merge', description=dedent("""
+    merge_parser = vcf_subparsers.add_parser('merge',
+                                             description=dedent("""
         Merge VCFs stored in google buckets pointed to by `input_keys`.
-        Output to `output_key` in the same bucket.
+        Output to `output_key` in the same bucket. Additional arguments will be passed
+        on to bcftools merge.
 
         xsamtools vcf merge --bucket "fc-9169fcd1-92ce-4d60-9d2d-d19fd326ff10" \\
         --inputs "a.vcf.gz,b.vcf.gz" \\
-        --output "combined.vcf.gz""").strip(), formatter_class=argparse.RawDescriptionHelpFormatter)
-    merge_parser.add_argument("--force-samples", action="store_true",
-                              help="resolve duplicate sample names")
-    merge_parser.add_argument("--print-header", action="store_true",
-                              help="print only the merged header and exit")
+        --output "combined.vcf.gz""").strip(), formatter_class=argparse.RawDescriptionHelpFormatter,
+                                             epilog=merge_options())
     merge_parser.add_argument("--inputs", type=str, required=True,
                               help="Input VCFs. These can be Google Storage objects if prefixed with 'gs://'")
     merge_parser.add_argument("--output", type=str, required=True,
@@ -69,5 +78,5 @@ def main(args):
     subparsers = parser.add_subparsers()
     add_cram_subparser(subparsers)
     add_vcf_subparser(subparsers)
-    args = parser.parse_args(args)
-    args.func(args)
+    args, extra_args = parser.parse_known_args(args)
+    args.func(args, extra_args)

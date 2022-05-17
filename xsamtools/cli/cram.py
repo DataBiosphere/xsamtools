@@ -6,7 +6,7 @@ import argparse
 from xsamtools import cram
 
 
-def view(args: argparse.Namespace):
+def view(args: argparse.Namespace, extra_args):
     """
     A limited wrapper around "samtools view", but with functions to operate on google cloud bucket keys.
     """

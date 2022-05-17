@@ -6,7 +6,7 @@ import argparse
 from xsamtools import vcf
 
 
-def merge(args: argparse.Namespace):
+def merge(args: argparse.Namespace, extra_args):
     """
     Merge VCFs stored in google buckets pointed to by `input_keys`.
     Output to `output_key` in the same bucket.
@@ -16,22 +16,17 @@ def merge(args: argparse.Namespace):
     --output "combined.vcf.gz"
     """
     inputs = args.inputs.split(",")
-    extra_args = []
-    if args.force_samples:
-        extra_args.append('--force-samples')
-    if args.print_header:
-        extra_args.append('--print-header')
     vcf.combine(inputs, args.output, *extra_args)
 
 
-def subsample(args: argparse.Namespace):
+def subsample(args: argparse.Namespace, extra_args):
     """
     Subsample VCF a stored locally or in google bucket.
     """
     vcf.subsample(args.input, args.output, args.samples.split(","))
 
 
-def stats(args: argparse.Namespace):
+def stats(args: argparse.Namespace, extra_args):
     """
     Statistics for VCF stored locally or in google bucket.
     """

@@ -48,6 +48,25 @@ class TestXsamtools(SuppressWarningsMixin, unittest.TestCase):
                 output = "test_bcftools_combined.vcf.gz"
                 vcf.combine(inputs, output)
 
+    def test_cli_vcf_merge(self):
+        inputs = ["tests/fixtures/a.vcf.gz", "tests/fixtures/b.vcf.gz"]
+        output = "test_bcftools_combined.vcf.gz"
+        # Test with some arguments that get passed on to bcftools
+        vcf.combine(inputs, output, '--force-samples', '--print-header')
+
+    def test_cli_subsample(self):
+        samples = ["NWD994242", "NWD637453"]
+        output_key = "test_bcftools_subsampled.vcf.gz"
+        src_path = "tests/fixtures/expected.vcf.gz"
+        dst_path = output_key
+        # Test with some arguments that get passed on to bcftools
+        vcf.subsample(src_path, dst_path, samples, '--no-header', '--no-version')
+
+    def test_cli_stats(self):
+        src_path = "tests/fixtures/expected.vcf.gz"
+        # Test with some arguments that get passed on to bcftools
+        vcf.stats(src_path, '--1st-allele-only')
+
     def test_subsample(self):
         samples = ["NWD994242", "NWD637453"]
         with self.subTest("test cloud locations"):

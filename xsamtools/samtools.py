@@ -31,12 +31,6 @@ def _samtools_binary_path(name):
         return path
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
-    path = name
-    try:
-        _run([path, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return path
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
     return None
 
 for name in paths:

@@ -12,7 +12,13 @@ from xsamtools import pipes, samtools, gs_utils
 
 cores_available = cpu_count()
 
-def _merge(input_filepaths: Sequence[str], output_filepath: str, *args):
+def reject_preset_args(args, preset_args):
+    if any(arg in args for arg in preset_args):
+        raise ValueError(f'The following args cannot be supplied manually: {preset_args}')
+
+def _merge(input_filepaths: Sequence[str], output_filepath: str, *args: str):
+    preset_args = ['-o', '-O', '--threads', '--no-index']
+    reject_preset_args(args, preset_args)
     subprocess.run([samtools.paths['bcftools'],
                     "merge",
                     "--no-index",
@@ -23,7 +29,9 @@ def _merge(input_filepaths: Sequence[str], output_filepath: str, *args):
                    + [fp for fp in input_filepaths],
                    check=True)
 
-def _view(input_filepath: str, output_filepath: str, samples: Sequence[str], *args):
+def _view(input_filepath: str, output_filepath: str, samples: Sequence[str], *args: str):
+    preset_args = ['-o', '-O', '-S', '--threads']
+    reject_preset_args(args, preset_args)
     with NamedTemporaryFile() as tf:
         with open(tf.name, "w") as fh:
             fh.write(os.linesep.join(samples))
@@ -37,7 +45,9 @@ def _view(input_filepath: str, output_filepath: str, samples: Sequence[str], *ar
                         input_filepath],
                        check=True)
 
-def _stats(input_filepath: str, *args):
+def _stats(input_filepath: str, *args: str):
+    preset_args = ['--threads']
+    reject_preset_args(args, preset_args)
     subprocess.run([samtools.paths['bcftools'],
                     "stats",
                     "--threads", f"{2 * cores_available}",
@@ -46,7 +56,7 @@ def _stats(input_filepath: str, *args):
                    check=True)
 
 @xprofile.profile("combine")
-def combine(src_files: Sequence[str], output_file: str, *args):
+def combine(src_files: Sequence[str], output_file: str, *args: str):
     assert samtools.paths['bcftools']
     gs_utils._assert_access(src_files, [output_file])
     with ProcessPoolExecutor(max_workers=len(src_files) + 1) as e:
@@ -60,7 +70,7 @@ def combine(src_files: Sequence[str], output_file: str, *args):
             writer.close()
 
 @xprofile.profile("subsample")
-def subsample(src_path: str, dst_path: str, samples, *args):
+def subsample(src_path: str, dst_path: str, samples, *args: str):
     assert samtools.paths['bcftools']
     gs_utils._assert_access([src_path], [dst_path])
     with ProcessPoolExecutor(max_workers=2) as e:
@@ -72,7 +82,7 @@ def subsample(src_path: str, dst_path: str, samples, *args):
             reader.close()
             writer.close()
 
-def stats(src_path: str, *args):
+def stats(src_path: str, *args: str):
     assert samtools.paths['bcftools']
     gs_utils._assert_access([src_path], [])
     with ProcessPoolExecutor() as e:

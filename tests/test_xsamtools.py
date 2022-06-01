@@ -1,11 +1,9 @@
 #!/usr/bin/env python
-import io
 import os
 import subprocess
 import sys
 import unittest
 import unittest.mock
-from pathlib import Path
 from subprocess import CalledProcessError
 from typing import List
 
@@ -56,7 +54,7 @@ class TestXsamtools(SuppressWarningsMixin, unittest.TestCase):
         output = "test_bcftools_combined.vcf.gz"
         # Test with some arguments that get passed on to bcftools
         vcf.combine(inputs, output, '--force-samples', '--print-header')
-        self.assertTrue(Path(output).stat().st_size > 0)
+        self.assertTrue(os.stat(output).st_size > 0)
 
     def test_cli_subsample(self):
         samples = ["NWD994242", "NWD637453"]
@@ -65,7 +63,7 @@ class TestXsamtools(SuppressWarningsMixin, unittest.TestCase):
         dst_path = output_key
         # Test with some arguments that get passed on to bcftools
         vcf.subsample(src_path, dst_path, samples, '--no-header', '--no-version')
-        self.assertGreater(Path(dst_path).stat().st_size, 0)
+        self.assertTrue(os.stat(output_key).st_size > 0)
 
     def test_cli_stats(self):
         src_path = "tests/fixtures/expected.vcf.gz"

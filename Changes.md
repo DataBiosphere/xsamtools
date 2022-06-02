@@ -1,3 +1,7 @@
+# Changes for v0.6.0 (2022-06-01)
+Generalize args to accept all and pass directly to samtools (#103)
+Remove dependency on CLI builder (#102)
+
 # Changes for v0.5.9 (2022-04-18)
 Include xsamtools so that we can have a functioning release
 

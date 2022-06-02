@@ -1,8 +1,9 @@
 #!/usr/bin/env python
-import io
 import os
+import subprocess
 import sys
 import unittest
+import unittest.mock
 from subprocess import CalledProcessError
 from typing import List
 
@@ -47,6 +48,52 @@ class TestXsamtools(SuppressWarningsMixin, unittest.TestCase):
                 inputs.append(f"gs://{WORKSPACE_BUCKET}/test_vcfs/broken.vcf.gz")
                 output = "test_bcftools_combined.vcf.gz"
                 vcf.combine(inputs, output)
+
+    def test_cli_vcf_merge(self):
+        inputs = ["tests/fixtures/a.vcf.gz", "tests/fixtures/b.vcf.gz"]
+        output = "test_bcftools_combined.vcf.gz"
+        # Test with some arguments that get passed on to bcftools
+        vcf.combine(inputs, output, '--force-samples', '--print-header')
+        self.assertTrue(os.stat(output).st_size > 0)
+
+    def test_cli_subsample(self):
+        samples = ["NWD994242", "NWD637453"]
+        output_key = "test_bcftools_subsampled.vcf.gz"
+        src_path = "tests/fixtures/expected.vcf.gz"
+        dst_path = output_key
+        # Test with some arguments that get passed on to bcftools
+        vcf.subsample(src_path, dst_path, samples, '--no-header', '--no-version')
+        self.assertTrue(os.stat(output_key).st_size > 0)
+
+    def test_cli_stats(self):
+        src_path = "tests/fixtures/expected.vcf.gz"
+        # Test with some arguments that get passed on to bcftools
+        result = []
+        # save run to avoid infinite mock loop
+        run_function = subprocess.run
+
+        def capturing_run(*args, **kwargs):
+            run = run_function(*args, **kwargs, capture_output=True)
+            result.append(run)
+            return run
+        with unittest.mock.patch('subprocess.run', new=capturing_run):
+            vcf.stats(src_path, '--1st-allele-only')
+        # Unpacking ensures single call was made to subprocess.run
+        result, =  result
+        expected = b'# This file was produced by bcftools '
+        self.assertTrue(result.stdout.startswith(expected))
+
+    def test_preset_args(self):
+        # Test with some arguments that get passed on to bcftools
+        with self.assertRaises(ValueError) as cm:
+            vcf.subsample("baz", "bar", ["foo"], '-S')
+        self.assertTrue(cm.exception.args[0].startswith("The following args cannot be supplied manually"))
+        with self.assertRaises(ValueError) as cm:
+            vcf.stats("baz", '--threads')
+        self.assertTrue(cm.exception.args[0].startswith("The following args cannot be supplied manually"))
+        with self.assertRaises(ValueError) as cm:
+            vcf.combine("baz", "foo", '-O', '--no-index')
+        self.assertTrue(cm.exception.args[0].startswith("The following args cannot be supplied manually"))
 
     def test_subsample(self):
         samples = ["NWD994242", "NWD637453"]

@@ -1,7 +1,7 @@
 include common.mk
 
 MODULES=xsamtools tests
-SAMTOOLS_VERSION=1.10
+SAMTOOLS_VERSION=1.15.1
 
 export TNU_TESTMODE?=workspace_access
 

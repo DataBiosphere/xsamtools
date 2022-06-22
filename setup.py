@@ -20,14 +20,15 @@ class BuildPy(build_py.build_py):
         super().run()
         if not self.dry_run:
             try:
-                _run(["tar", "xjf", "htslib.tar.bz2", "-C", "build"])
-                _run(["tar", "xjf", "bcftools.tar.bz2", "-C", "build"])
-                _run(["tar", "xjf", "samtools.tar.bz2", "-C", "build"])
-                _run(["./configure"], cwd="build/htslib")
-                _run(["./configure"], cwd="build/samtools")
+                os.makedirs('build/htslib', exist_ok=True)
+                _run(["tar", "-vxjf", "htslib.tar.bz2", "--directory=build/htslib", "--strip-components=1"])
+                os.makedirs('build/bcftools', exist_ok=True)
+                _run(["tar", "-vxjf", "bcftools.tar.bz2", "--directory=build/bcftools", "--strip-components=1"])
+                os.makedirs('build/samtools', exist_ok=True)
+                _run(["tar", "-vxjf", "samtools.tar.bz2", "--directory=build/samtools", "--strip-components=1"])
                 _run(["make"], cwd="build/htslib")
-                _run(["make"], cwd="build/bcftools")
                 _run(["make"], cwd="build/samtools")
+                _run(["make"], cwd="build/bcftools")
             except subprocess.CalledProcessError:
                 print("Failed to build samtools/htslib/bcftools:")
                 traceback.print_exc()

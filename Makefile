@@ -17,28 +17,19 @@ tests:
 	PYTHONWARNINGS=ignore:ResourceWarning coverage run --source=xsamtools \
 		-m unittest discover --start-directory tests --top-level-directory . --verbose
 
-package_samtools: clean_samtools samtools.tar.bz2 htslib.tar.bz2 bcftools.tar.bz2
+package_samtools: clean_samtools samtools htslib bcftools
 
-samtools.tar.bz2:
-	git clone --depth 1 -b $(SAMTOOLS_VERSION) https://github.com/samtools/samtools.git
-	(cd samtools ; rm -rf .git ; autoheader && autoconf)
-	tar cjf samtools.tar.bz2 samtools
-	rm -rf samtools
+samtools:
+	wget https://github.com/samtools/samtools/releases/download/$(SAMTOOLS_VERSION)/samtools-$(SAMTOOLS_VERSION).tar.bz2 -O samtools.tar.bz2
 
-htslib.tar.bz2:
-	git clone --depth 1 -b xbrianh-readers-idx https://github.com/xbrianh/htslib
-	(cd htslib ; rm -rf .git ; autoheader && autoconf)
-	tar cjf htslib.tar.bz2 htslib
-	rm -rf htslib
+htslib:
+	wget https://github.com/samtools/htslib/releases/download/$(SAMTOOLS_VERSION)/htslib-$(SAMTOOLS_VERSION).tar.bz2 -O htslib.tar.bz2
 
-bcftools.tar.bz2:
-	git clone --depth 1 -b xbrianh-no-index https://github.com/xbrianh/bcftools
-	(cd bcftools ; rm -rf .git)
-	tar cjf bcftools.tar.bz2 bcftools
-	rm -rf bcftools
+bcftools:
+	wget https://github.com/samtools/bcftools/releases/download/$(SAMTOOLS_VERSION)/bcftools-$(SAMTOOLS_VERSION).tar.bz2 -O bcftools.tar.bz2
 
 clean_samtools:
-	rm -rf samtools samtools.tar.bz2 bcftools bcftools.tar.bz2 htslib htslib.tar.bz2
+	rm -rf samtools.tar.bz2 bcftools.tar.bz2 htslib.tar.bz2
 
 version: xsamtools/version.py
 

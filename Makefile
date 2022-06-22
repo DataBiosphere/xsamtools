@@ -45,13 +45,10 @@ version: xsamtools/version.py
 xsamtools/version.py: setup.py
 	echo "__version__ = '$$(python setup.py --version)'" > $@
 
-clean:
-	git clean -dfx
-
-sdist: clean version
+sdist: version
 	python setup.py sdist
 
-build: clean version
+build: version
 	python setup.py bdist_wheel
 
 install: build
@@ -65,4 +62,4 @@ build/bcftools/bcftools:
 build/samtools/samtools:
 	python setup.py bdist_wheel
 
-.PHONY: test lint mypy tests clean sdist build install package_samtools
+.PHONY: test lint mypy tests sdist build install package_samtools

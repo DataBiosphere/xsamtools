@@ -1,12 +1,12 @@
 import os
 import glob
-import warnings
 import subprocess
 import traceback
 from setuptools import setup, find_packages
 from setuptools.command import install, build_py
 
 
+SAMTOOLS_VERSION = '1.15.1'
 install_requires = [line.rstrip() for line in open(os.path.join(os.path.dirname(__file__), "requirements.txt"))]
 
 
@@ -20,15 +20,17 @@ class BuildPy(build_py.build_py):
         super().run()
         if not self.dry_run:
             try:
-                os.makedirs('build/htslib', exist_ok=True)
-                _run(["tar", "-vxjf", "htslib.tar.bz2", "--directory=build/htslib", "--strip-components=1"])
-                os.makedirs('build/bcftools', exist_ok=True)
-                _run(["tar", "-vxjf", "bcftools.tar.bz2", "--directory=build/bcftools", "--strip-components=1"])
-                os.makedirs('build/samtools', exist_ok=True)
-                _run(["tar", "-vxjf", "samtools.tar.bz2", "--directory=build/samtools", "--strip-components=1"])
-                _run(["make"], cwd="build/htslib")
-                _run(["make"], cwd="build/samtools")
-                _run(["make"], cwd="build/bcftools")
+                for tool in ['samtools', 'htslib', 'bcftools']:
+                    if not os.path.exists(f'{tool}.tar.bz2'):
+                        _run(['wget',
+                              f'https://github.com/samtools/{tool}/releases/download/{SAMTOOLS_VERSION}/{tool}-{SAMTOOLS_VERSION}.tar.bz2',
+                              '-O', f'{tool}.tar.bz2'])
+                    os.makedirs(f'build/{tool}', exist_ok=True)
+                    _run(["tar", "-vxjf", f"{tool}.tar.bz2", f"--directory=build/{tool}", "--strip-components=1"])
+
+                for tool in ['samtools', 'htslib', 'bcftools']:
+                    _run(["./configure"], cwd=f"build/{tool}")
+                    _run(["make"], cwd=f"build/{tool}")
             except subprocess.CalledProcessError:
                 print("Failed to build samtools/htslib/bcftools:")
                 traceback.print_exc()

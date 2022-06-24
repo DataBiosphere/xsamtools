@@ -21,12 +21,13 @@ class BuildPy(build_py.build_py):
         if not self.dry_run:
             try:
                 for tool in ['samtools', 'htslib', 'bcftools']:
-                    if not os.path.exists(f'{tool}.tar.bz2'):
-                        _run(['wget',
-                              f'https://github.com/samtools/{tool}/releases/download/{SAMTOOLS_VERSION}/{tool}-{SAMTOOLS_VERSION}.tar.bz2',
-                              '-O', f'{tool}.tar.bz2'])
-                    os.makedirs(f'build/{tool}', exist_ok=True)
-                    _run(["tar", "-vxjf", f"{tool}.tar.bz2", f"--directory=build/{tool}", "--strip-components=1"])
+                    if not os.path.exists(f'build/{tool}'):
+                        if not os.path.exists(f'{tool}.tar.bz2'):
+                            _run(['wget',
+                                  f'https://github.com/samtools/{tool}/releases/download/{SAMTOOLS_VERSION}/{tool}-{SAMTOOLS_VERSION}.tar.bz2',
+                                  '-O', f'{tool}.tar.bz2'])
+                        os.makedirs(f'build/{tool}', exist_ok=True)
+                        _run(["tar", "-vxjf", f"{tool}.tar.bz2", f"--directory=build/{tool}", "--strip-components=1"])
 
                 for tool in ['samtools', 'htslib', 'bcftools']:
                     _run(["./configure"], cwd=f"build/{tool}")

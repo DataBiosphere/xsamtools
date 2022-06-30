@@ -6,16 +6,20 @@ import subprocess
 pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))  # noqa
 sys.path.insert(0, pkg_root)  # noqa
 
+<<<<<<< HEAD
 from xsamtools.utils import substitute_drs_and_gs_uris_for_http, run
 from xsamtools.samtools import _samtools_binary_path
 
 # imports required here for these command groups to show in the CLI
 import xsamtools.cli.vcf
+=======
+>>>>>>> 5f964199d15c6f04c62667f6de180153a911f0bb
 
-from xsamtools.cli import dispatch
+from xsamtools.cli import main
 
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     args = sys.argv[1:]
     xsamtools_parser = dispatch.parser
 
@@ -30,3 +34,6 @@ if __name__ == "__main__":
         run([_samtools_binary_path('samtools')] + args)
     else:
         dispatch(args)
+=======
+    main(sys.argv[1:])
+>>>>>>> 5f964199d15c6f04c62667f6de180153a911f0bb

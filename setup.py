@@ -1,12 +1,12 @@
 import os
 import glob
-import warnings
 import subprocess
 import traceback
 from setuptools import setup, find_packages
 from setuptools.command import install, build_py
 
 
+SAMTOOLS_VERSION = '1.15.1'
 install_requires = [line.rstrip() for line in open(os.path.join(os.path.dirname(__file__), "requirements.txt"))]
 
 
@@ -20,14 +20,18 @@ class BuildPy(build_py.build_py):
         super().run()
         if not self.dry_run:
             try:
-                _run(["tar", "xjf", "htslib.tar.bz2", "-C", "build"])
-                _run(["tar", "xjf", "bcftools.tar.bz2", "-C", "build"])
-                _run(["tar", "xjf", "samtools.tar.bz2", "-C", "build"])
-                _run(["./configure"], cwd="build/htslib-1.14")
-                _run(["./configure"], cwd="build/samtools-1.14")
-                _run(["make"], cwd="build/htslib-1.14")
-                _run(["make"], cwd="build/bcftools-1.14")
-                _run(["make"], cwd="build/samtools-1.14")
+                for tool in ['samtools', 'htslib', 'bcftools']:
+                    if not os.path.exists(f'build/{tool}'):
+                        if not os.path.exists(f'{tool}.tar.bz2'):
+                            _run(['wget',
+                                  f'https://github.com/samtools/{tool}/releases/download/{SAMTOOLS_VERSION}/{tool}-{SAMTOOLS_VERSION}.tar.bz2',
+                                  '-O', f'{tool}.tar.bz2'])
+                        os.makedirs(f'build/{tool}', exist_ok=True)
+                        _run(["tar", "-vxjf", f"{tool}.tar.bz2", f"--directory=build/{tool}", "--strip-components=1"])
+
+                for tool in ['samtools', 'htslib', 'bcftools']:
+                    _run(["./configure"], cwd=f"build/{tool}")
+                    _run(["make"], cwd=f"build/{tool}")
             except subprocess.CalledProcessError:
                 print("Failed to build samtools/htslib/bcftools:")
                 traceback.print_exc()
@@ -66,27 +70,11 @@ with open("README.md") as fh:
     long_description = fh.read()
 
 def get_version():
-    filepath = os.path.join(os.path.dirname(__file__), "gs_chunked_io", "version.py")
-    if os.path.isfile(filepath):
-        # In source distributions or builds, version is available in the generated gs_chunked_io/version.py file
-        with open(filepath) as fh:
-            version = dict()
-            exec(fh.read().strip(), version)
-            return version['__version__']
-    else:
-        p = subprocess.run(["git", "describe", "--tags", "--match", "v*.*.*"], stdout=subprocess.PIPE)
-        if 128 == p.returncode:
-            warnings.warn('There are no git tags with version information. '
-                          'To tag the first commit as v0.0.0 use '
-                          '`git tag --annotate "v0.0.0" $(git rev-list --max-parents=0 HEAD) -m "v0.0.0"`')
-            return "0"
-        else:
-            p.check_returncode()
-            out = p.stdout.decode("ascii").strip()
-            if "-" in out:
-                out = out.split("-", 1)[0]
-            assert out.startswith("v")
-            return out[1:]
+    filepath = os.path.join(os.path.dirname(__file__), "xsamtools", "version.py")
+    with open(filepath) as fh:
+        version = dict()
+        exec(fh.read().strip(), version)
+        return version['__version__']
 
 setup(
     name='xsamtools',

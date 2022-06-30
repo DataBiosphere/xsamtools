@@ -1,3 +1,46 @@
+# Changes for v0.6.0 (2022-06-01)
+Generalize args to accept all and pass directly to samtools (#103)
+Remove dependency on CLI builder (#102)
+
+# Changes for v0.5.9 (2022-04-18)
+Include xsamtools so that we can have a functioning release
+
+# Changes for v0.5.8 (2022-04-15)
+Fix how version info is stored
+
+# Changes for v0.5.7 (2022-04-15)
+
+# Changes for v0.5.6 (2022-04-15)
+
+# Changes for v0.5.5 (2022-04-15)
+Save version during release script (resolves #99) (#100)
+
+# Changes for v0.5.4 (2022-04-14)
+
+# Changes for v0.5.3 (2022-04-13)
+Update README.md (#98)
+Add options for --force-samples and --print-header (#97)
+Spelling.
+Add curses lib. (#95)
+Add extra error parsing. (#75)
+Add decode container header function. (#91)
+Add int32 decode method. (#90)
+Add LFT8 decode/encode. (#89)
+Add decode itf8 array. (#83)
+Add functions to encode and decode itf8. (#82)
+Add cram file definition. (#81)
+Enable CI/CD (#85)
+Fix linting. (#87)
+Pin six (#84)
+Fix mypy. (#86)
+Switch to warning mixin in test_cram. (#80)
+Fix linting. (#79)
+Enable and test cram CLI. (#77)
+Add crai parsing. (#76)
+Bump TNU (#73)
+Add basic cram view with no slicing. (#74)
+Bump TNU (#72)
+
 # Changes for v0.5.2 (2020-10-28)
 Pin CLI builder. (#71)
 

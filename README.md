@@ -11,12 +11,13 @@ Installation requires a C toolchain. Typically Ubuntu/Debian systems should have
   - `libbz2-dev`
   - `liblzma-dev`
   - `libcurl4-openssl-dev`
+  - `libncurses5-dev`
 
 `libcurl4-openssl-dev` may be omitted at the cost of some cloud support features in htslib.
 
 # Usage
 
-After succesful installation, the following executables are available:
+After successful installation, the following executables are available:
 
 samtools:
   - htsfile
@@ -51,4 +52,4 @@ chromosome or the merge will fail.
 # Docker
 
 A Docker image with xsamtools installed is published at
-[https://hub.docker.com/repository/docker/xbrianh/xsamtools](https://hub.docker.com/repository/docker/xbrianh/xsamtools)
+[https://hub.docker.com/r/xbrianh/xsamtools](https://hub.docker.com/r/xbrianh/xsamtools)

@@ -1,7 +1,6 @@
 include common.mk
 
 MODULES=xsamtools tests
-SAMTOOLS_VERSION=1.14
 
 export TNU_TESTMODE?=workspace_access
 
@@ -17,41 +16,15 @@ tests:
 	PYTHONWARNINGS=ignore:ResourceWarning coverage run --source=xsamtools \
 		-m unittest discover --start-directory tests --top-level-directory . --verbose
 
-package_samtools: clean_samtools samtools.tar.bz2 htslib.tar.bz2 bcftools.tar.bz2
-
-samtools.tar.bz2:
-	git clone --depth 1 -b $(SAMTOOLS_VERSION) https://github.com/samtools/samtools.git
-	(cd samtools ; rm -rf .git ; autoheader && autoconf)
-	tar cjf samtools.tar.bz2 samtools
-	rm -rf samtools
-
-htslib.tar.bz2:
-	git clone --depth 1 -b $(SAMTOOLS_VERSION) https://github.com/samtools/htslib.git
-	(cd htslib ; rm -rf .git ; autoheader && autoconf)
-	tar cjf htslib.tar.bz2 htslib
-	rm -rf htslib
-
-bcftools.tar.bz2:
-	git clone --depth 1 -b $(SAMTOOLS_VERSION) https://github.com/samtools/bcftools.git
-	(cd bcftools ; rm -rf .git)
-	tar cjf bcftools.tar.bz2 bcftools
-	rm -rf bcftools
-
-clean_samtools:
-	rm -rf samtools samtools.tar.bz2 bcftools bcftools.tar.bz2 htslib htslib.tar.bz2
-
 version: xsamtools/version.py
 
 xsamtools/version.py: setup.py
 	echo "__version__ = '$$(python setup.py --version)'" > $@
 
-clean:
-	git clean -dfx
-
-sdist: clean version
+sdist: version
 	python setup.py sdist
 
-build: clean version
+build: version
 	python setup.py bdist_wheel
 
 install: build
@@ -65,4 +38,4 @@ build/bcftools/bcftools:
 build/samtools/samtools:
 	python setup.py bdist_wheel
 
-.PHONY: test lint mypy tests clean sdist build install package_samtools
+.PHONY: test lint mypy tests sdist build install

@@ -1,2 +1,2 @@
-terra-notebook-utils >= 0.7.0, < 0.8.0
+terra-notebook-utils
 six >= 1.15.0

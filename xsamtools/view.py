@@ -17,7 +17,6 @@ def samtools_view(preset_args):
     """
     preset_args = substitute_drs_and_gs_uris_for_http(preset_args)
     cmd = ['samtools', 'view'] + preset_args
-    print(cmd)
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     for line in process.stdout:
         sys.stdout.write(line.decode('utf-8'))

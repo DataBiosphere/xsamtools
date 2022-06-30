@@ -5,7 +5,6 @@ from typing import Any
 
 
 def substitute_drs_and_gs_uris_for_http(args):
-    print(args)
     new_args = []
     for arg in args:
         if arg.startswith('-') and '=' in arg:

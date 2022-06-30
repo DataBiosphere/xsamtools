@@ -4,16 +4,26 @@ import terra_notebook_utils as tnu
 from typing import Any
 
 
-def substitute_drs_and_gs_uris_for_http(*args):
-    # TODO: literally input the entire list of exact options for samtools view?
+def substitute_drs_and_gs_uris_for_http(args):
+    print(args)
     new_args = []
     for arg in args:
-        if arg.strip('"').strip("'").startswith('drs://'):
-            new_args.append(tnu.drs.access(arg))
-        elif args.strip('"').strip("'").startswith('gs://'):
-            new_args.append(tnu.gs.get_signed_url(arg))
+        if arg.startswith('-') and '=' in arg:
+            key_arg, value_arg = arg.split('=', 1)
         else:
-            new_args.append(arg)
+            key_arg, value_arg = None, arg
+
+        if value_arg.strip('"').strip("'").startswith('drs://'):
+            value_arg = tnu.drs.access(arg)
+        elif value_arg.strip('"').strip("'").startswith('gs://'):
+            value_arg = tnu.gs.get_signed_url(arg)
+
+        if key_arg:
+            arg = f'{key_arg}={value_arg}'
+        else:
+            arg = value_arg
+
+        new_args.append(arg)
     return new_args
 
 

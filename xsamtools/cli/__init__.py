@@ -50,8 +50,7 @@ def add_view_subparser(subparsers):
     view_parser = subparsers.add_parser(
         'view',
         description='A wrapper around samtools that accepts gs:// and drs:// input file paths.',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=merge_options()
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
     view_parser.set_defaults(func=samtools_view)
 

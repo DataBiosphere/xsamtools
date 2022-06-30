@@ -28,7 +28,7 @@ build: version
 	python setup.py bdist_wheel
 
 install: build
-	pip install --upgrade dist/*.whl
+	pip install -e --upgrade dist/*.whl
 
 test-samtools: build/samtools/samtools build/htslib/htsfile build/bcftools/bcftools
 build/htslib/htsfile:

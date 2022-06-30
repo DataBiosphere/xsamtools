@@ -54,13 +54,13 @@ class Install(install.install):
                       f"libexecdir={libdir}",
                       f"datarootdir={datadir}",
                       "INSTALL_MAN=:",
-                      "install"], cwd="build/htslib-1.14")
+                      "install"], cwd="build/htslib")
                 _run(["make",
                       f"bindir={bindir}",
                       f"libdir={libdir}",
                       f"libexecdir={libdir}",
                       "INSTALL_MAN=:",
-                      "install"], cwd="build/bcftools-1.14")
+                      "install"], cwd="build/bcftools")
             except subprocess.CalledProcessError:
                 print("Failed to package htslib/bcftools")
                 traceback.print_exc()

@@ -1,13 +1,11 @@
 import os
-import sys
 import typing
 import warnings
 import subprocess
-from typing import Optional
 
 import xsamtools
 
-paths: typing.Dict[str, str] = dict(htsfile=None, bcftools=None)
+paths: typing.Dict[str, str] = dict(htsfile=None, bcftools=None, samtools=None)
 
 def _run(cmd: list, **kwargs):
     p = subprocess.run(cmd, **kwargs)
@@ -15,22 +13,23 @@ def _run(cmd: list, **kwargs):
     return p
 
 def _samtools_binary_path(name):
-    path = os.path.join(xsamtools.__path__[0].split("/lib", 1)[0], "bin", name)
+    path = os.path.abspath(os.path.join(xsamtools.__path__[0].split("/lib", 1)[0], "bin", name))
     try:
         _run([path, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return path
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
     # Look for samtools build directory in repo root (useful for issuing commands from repo)
-    paths = dict(bcftools=os.path.join(xsamtools.__path__[0], "..", "build", "bcftools", "bcftools"),
-                 htsfile=os.path.join(xsamtools.__path__[0], "..", "build", "htslib", "htsfile"),
-                 samtools=os.path.join(xsamtools.__path__[0], "..", "build", "samtools", "samtools"))
+    paths = dict(bcftools=os.path.abspath(os.path.join(xsamtools.__path__[0], "build", "bcftools", "bcftools")),
+                 htsfile=os.path.abspath(os.path.join(xsamtools.__path__[0], "build", "htslib", "htsfile")),
+                 samtools=os.path.abspath(os.path.join(xsamtools.__path__[0], "build", "samtools", "samtools")))
     path = paths[name]
+    print(path)
     try:
         _run([path, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return path
     except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
+        raise
     return None
 
 for name in paths:

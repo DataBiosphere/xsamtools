@@ -20,9 +20,9 @@ def _samtools_binary_path(name):
     except (FileNotFoundError, subprocess.CalledProcessError):
         pass
     # Look for samtools build directory in repo root (useful for issuing commands from repo)
-    paths = dict(bcftools=os.path.abspath(os.path.join(xsamtools.__path__[0], "build", "bcftools", "bcftools")),
-                 htsfile=os.path.abspath(os.path.join(xsamtools.__path__[0], "build", "htslib", "htsfile")),
-                 samtools=os.path.abspath(os.path.join(xsamtools.__path__[0], "build", "samtools", "samtools")))
+    paths = dict(bcftools=os.path.join(xsamtools.__path__[0], "..", "build", "bcftools", "bcftools"),
+                 htsfile=os.path.join(xsamtools.__path__[0], "..", "build", "htslib", "htsfile"),
+                 samtools=os.path.join(xsamtools.__path__[0], "..", "build", "samtools", "samtools"))
     path = paths[name]
     print(path)
     try:

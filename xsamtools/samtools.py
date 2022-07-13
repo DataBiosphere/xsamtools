@@ -1,9 +1,7 @@
 import os
-import sys
 import typing
 import warnings
 import subprocess
-from typing import Optional
 
 import xsamtools
 
@@ -26,11 +24,12 @@ def _samtools_binary_path(name):
                  htsfile=os.path.join(xsamtools.__path__[0], "..", "build", "htslib", "htsfile"),
                  samtools=os.path.join(xsamtools.__path__[0], "..", "build", "samtools", "samtools"))
     path = paths[name]
+    print(path)
     try:
         _run([path, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return path
     except (FileNotFoundError, subprocess.CalledProcessError):
-        pass
+        raise
     return None
 
 for name in paths:

@@ -7,7 +7,7 @@ from typing import Optional
 
 import xsamtools
 
-paths: typing.Dict[str, str] = dict(htsfile=None, bcftools=None)
+paths: typing.Dict[str, str] = dict(htsfile=None, bcftools=None, samtools=None)
 
 def _run(cmd: list, **kwargs):
     p = subprocess.run(cmd, **kwargs)

@@ -13,7 +13,7 @@ def _run(cmd: list, **kwargs):
     return p
 
 def _samtools_binary_path(name):
-    path = os.path.abspath(os.path.join(xsamtools.__path__[0].split("/lib", 1)[0], "bin", name))
+    path = os.path.join(xsamtools.__path__[0].split("/lib", 1)[0], "bin", name)
     try:
         _run([path, "--version"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return path
